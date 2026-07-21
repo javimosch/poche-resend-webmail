@@ -69,3 +69,9 @@ Poche admin token and Resend API key **never** leave the server.
 ## License
 
 MIT
+
+## Live dogfood
+
+- **https://inbox2.intrane.fr** (dk1) — same `INBOX_TOKEN` as `inbox.intrane.fr`
+- Units: `poche-resend-store` (:17783) + `poche-resend-webmail` (:8805)
+- Does **not** replace `inbox.intrane.fr` (machin-resend-inbox stays primary for now)
