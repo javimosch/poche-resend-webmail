@@ -1,0 +1,28 @@
+/* poche-webmail-demo — artifact-like shell (not cream/terracotta AI defaults) */
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #c4a57414, transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, #3d5a6c18, transparent 50%),
+    #12110f;
+}
+
+.text-balance { text-wrap: balance; }
+
+.mail-row:hover { background: #1f1c18; }
+.mail-row.active { background: #c4a57418; border-left-color: #c4a574; }
+
+.scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: #2a2722; border-radius: 4px; }
+
+.prose-mail a { color: #c4a574; text-decoration: underline; }
+.prose-mail p { margin: 0.6em 0; }

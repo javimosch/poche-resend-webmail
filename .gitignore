@@ -1,0 +1,5 @@
+# Binaries / local data
+poche-resend-webmail
+*.data
+*.log
+/tmp/

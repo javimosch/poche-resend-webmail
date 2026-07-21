@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>poche resend webmail</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: { DEFAULT: '#e8e6e1', muted: '#9a958c', dim: '#5c574f' },
+            paper: { DEFAULT: '#12110f', raised: '#1a1815', line: '#2a2722' },
+            accent: { DEFAULT: '#c4a574', soft: '#c4a57422' },
+          },
+          fontFamily: {
+            display: ['"Iowan Old Style"', 'Palatino', 'Georgia', 'ui-serif', 'serif'],
+            sans: ['"Segoe UI"', 'system-ui', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="bg-paper text-ink font-sans antialiased">
+  <div id="root"></div>
+  <script type="text/babel" src="/js/api.jsx"></script>
+  <script type="text/babel" src="/js/components.jsx"></script>
+  <script type="text/babel" src="/js/app.jsx"></script>
+</body>
+</html>
