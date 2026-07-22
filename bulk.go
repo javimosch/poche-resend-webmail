@@ -55,6 +55,8 @@ func handleBulkAPI(w http.ResponseWriter, r *http.Request) {
 		switch req.Action {
 		case "mark_read", "mark_unread":
 			err = patchBool(p, id, "unread", req.Action == "mark_unread")
+		case "star", "unstar":
+			err = patchBool(p, id, "starred", req.Action == "star")
 		case "archive":
 			err = ensureTag(p, id, tagArchive)
 		case "unarchive":

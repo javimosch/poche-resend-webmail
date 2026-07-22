@@ -50,6 +50,11 @@ func syncInbound(limit int) (int, error) {
 			n++
 		}
 	}
+	if os.Getenv("AUTO_CLEANUP") == "1" {
+		if _, cErr := cleanup(); cErr != nil {
+			fmt.Fprintf(os.Stderr, "{\"event\":\"auto_cleanup_err\",\"err\":%q}\n", cErr.Error())
+		}
+	}
 	return n, nil
 }
 

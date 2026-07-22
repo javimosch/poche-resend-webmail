@@ -54,6 +54,12 @@ function bulkFetch(token, body) {
   });
 }
 
+function toggleStar(token, id) {
+  return apiFetch(token, "/api/messages/" + encodeURIComponent(id) + "/star", {
+    method: "PUT",
+  });
+}
+
 function formatWhen(ms) {
   if (!ms) return "";
   const d = new Date(typeof ms === "number" && ms < 1e12 ? ms * 1000 : ms);

@@ -208,6 +208,19 @@ function App() {
       .finally(() => setBusy(false));
   };
 
+  const onStar = (id) => {
+    if (!token || !id) return;
+    setBusy(true);
+    toggleStar(token, id)
+      .then((res) => {
+        const starred = !!res.starred;
+        if (msg && msg.id === id) setMsg(Object.assign({}, msg, { starred }));
+        setItems((prev) => prev.map((it) => (it.id === id ? Object.assign({}, it, { starred }) : it)));
+      })
+      .catch((e) => console.error(e))
+      .finally(() => setBusy(false));
+  };
+
   const onReply = (text) => {
     if (!msg) return Promise.resolve();
     setBusy(true);
@@ -226,114 +239,48 @@ function App() {
   if (err) return <div className="p-8 text-red-400">Config error: {err}</div>;
   if (!cfg) return <div className="p-8 text-ink-muted">Booting…</div>;
   if (!token) {
-    return (
-      <div className="max-w-lg mx-auto mt-24 p-8 border border-paper-line rounded-lg bg-paper-raised">
-        <h1 className="font-display text-2xl mb-2">WEBMAIL_TOKEN</h1>
-        <p className="text-ink-muted text-sm mb-4">
-          Open with <code className="text-accent">?token=…</code> or paste the Bearer token.
-        </p>
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (tokenInput.trim()) setToken(tokenInput.trim());
-          }}
-        >
-          <input
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
-            className="flex-1 bg-paper border border-paper-line rounded px-2 py-1.5 text-sm"
-            placeholder="token"
-          />
-          <button type="submit" className="text-xs px-3 py-1.5 border border-paper-line rounded">
-            Save
-          </button>
-        </form>
-      </div>
-    );
+    return <LoginForm tokenInput={tokenInput} setTokenInput={setTokenInput} setToken={setToken} />;
   }
 
-  const pages = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.floor(offset / pageSize) + 1;
-  const archived = msgTags.includes("archive") || view === "archive";
-  const selCount = selectAllPages ? total : checked.length;
-
   return (
-    <div className="h-full flex">
-      <Sidebar
-        view={view}
-        tagView={tagView}
-        setView={setView}
-        tags={tags}
-        unread={unread}
-        total={total}
-        status={status}
-        onCreateTag={onCreateTag}
-      />
-      <section className="w-[400px] shrink-0 border-r border-paper-line flex flex-col bg-paper/40">
-        <div className="px-4 py-3 border-b border-paper-line flex items-center justify-between">
-          <span className="text-sm text-ink-muted">{viewLabel(view, tagView)}</span>
-          <div className="flex gap-1 items-center">
-            <button
-              disabled={offset <= 0}
-              onClick={() => setOffset(Math.max(0, offset - pageSize))}
-              className="text-xs px-2 py-1 border border-paper-line rounded disabled:opacity-30"
-            >
-              Prev
-            </button>
-            <span className="text-[11px] font-mono text-ink-dim px-1 tabular-nums">
-              {page}/{pages}
-            </span>
-            <button
-              disabled={offset + pageSize >= total}
-              onClick={() => setOffset(offset + pageSize)}
-              className="text-xs px-2 py-1 border border-paper-line rounded disabled:opacity-30"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-        <Toolbar
-          q={qInput}
-          setQ={setQInput}
-          onSearch={() => setQ(qInput.trim())}
-          selCount={selCount}
-          onBulk={onBulk}
-          onMarkAll={onMarkAll}
-          view={view}
-          tags={tags}
-          busy={busy}
-        />
-        <div className="flex-1 min-h-0">
-          <MessageList
-            items={items}
-            selected={selected}
-            onSelect={setSelected}
-            loading={loading}
-            checked={checked}
-            setChecked={setChecked}
-            total={total}
-            selectAllPages={selectAllPages}
-            setSelectAllPages={setSelectAllPages}
-          />
-        </div>
-      </section>
-      <main className="flex-1 min-w-0 bg-paper">
-        <MessagePane
-          msg={msg}
-          msgTags={msgTags}
-          attachments={attachments}
-          token={token}
-          archived={archived}
-          busy={busy}
-          onToggleUnread={onToggleUnread}
-          onArchive={() => runOne("archive")}
-          onUnarchive={() => runOne("unarchive")}
-          onDelete={() => runOne("delete")}
-          onReply={onReply}
-        />
-      </main>
-    </div>
+    <AppLayout
+      view={view}
+      tagView={tagView}
+      setView={setView}
+      tags={tags}
+      unread={unread}
+      total={total}
+      status={status}
+      qInput={qInput}
+      setQInput={setQInput}
+      onSearch={() => setQ(qInput.trim())}
+      items={items}
+      selected={selected}
+      setSelected={setSelected}
+      loading={loading}
+      checked={checked}
+      setChecked={setChecked}
+      selectAllPages={selectAllPages}
+      setSelectAllPages={setSelectAllPages}
+      onCreateTag={onCreateTag}
+      onBulk={onBulk}
+      onMarkAll={onMarkAll}
+      msg={msg}
+      msgTags={msgTags}
+      attachments={attachments}
+      token={token}
+      archived={msgTags.includes("archive") || view === "archive"}
+      busy={busy}
+      onToggleUnread={onToggleUnread}
+      onStar={onStar}
+      onArchive={() => runOne("archive")}
+      onUnarchive={() => runOne("unarchive")}
+      onDelete={() => runOne("delete")}
+      onReply={onReply}
+      offset={offset}
+      setOffset={setOffset}
+      pageSize={pageSize}
+    />
   );
 }
 

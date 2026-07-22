@@ -107,7 +107,7 @@ func handleSeed(count int) {
 }
 
 func ensureSchema(p *Poche) error {
-	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required"); err != nil {
+	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required,retention_months:float,max_messages:int,max_bytes:int"); err != nil {
 		return fmt.Errorf("mailboxes: %w", err)
 	}
 	if err := p.AdminSchema("messages",
@@ -132,7 +132,7 @@ func ensureSchema(p *Poche) error {
 	_ = p.AdminIndex("message_tags", "message_id", "")
 	_ = p.AdminIndex("tags", "name", "")
 	_ = p.AdminIndex("attachments", "message_id", "")
-	if err := p.AdminExpose("mailboxes", "read,create"); err != nil {
+	if err := p.AdminExpose("mailboxes", "read,create,update"); err != nil {
 		return err
 	}
 	if err := p.AdminExpose("messages", "read,create,update,delete"); err != nil {

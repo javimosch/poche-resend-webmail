@@ -64,6 +64,18 @@ func startServer(port int) {
 	mux.HandleFunc("/api/tags", authed(handleTagsAPI))
 	mux.HandleFunc("/api/message-tags", authed(handleMessageTagsAPI))
 	mux.HandleFunc("/api/reply", authed(handleReplyAPI))
+	mux.HandleFunc("/api/cleanup", authed(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSON(w, 405, map[string]any{"ok": false, "error": "POST only"})
+			return
+		}
+		summary, err := cleanup()
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "data": summary})
+	}))
 	mux.HandleFunc("/api/sync", authed(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeJSON(w, 405, map[string]any{"ok": false, "error": "POST only"})
@@ -120,6 +132,9 @@ func handleGuide() {
 		"transport":   "Resend receiving + send",
 		"webhook":     "POST /webhooks/resend (email.received)",
 		"attachments": "GET /api/attachments/:id/open → new tab",
-		"cli":         []string{"serve", "seed", "sync", "list", "read", "reply", "guide"},
+		"cleanup":     "POST /api/cleanup · retention/quota purge",
+		"star":        "PUT /api/messages/:id/star · toggle",
+		"bulk":        "POST /api/bulk · mark_read|mark_unread|archive|unarchive|delete|star|unstar|tag|untag",
+		"cli":         []string{"serve", "seed", "sync", "cleanup", "list", "read", "reply", "guide"},
 	})
 }

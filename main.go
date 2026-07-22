@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -19,6 +19,8 @@ func main() {
 		handleSeedCmd()
 	case "sync":
 		handleSyncCmd()
+	case "cleanup":
+		handleCleanupCmd()
 	case "reply":
 		handleReplyCmd()
 	case "list":
@@ -68,6 +70,14 @@ func handleSyncCmd() {
 	outOK(map[string]any{"synced": n})
 }
 
+func handleCleanupCmd() {
+	summary, err := cleanup()
+	if err != nil {
+		fail(100, "integration", err.Error(), "set POCHE_TOKEN")
+	}
+	outOK(summary)
+}
+
 func handleReplyCmd() {
 	if len(os.Args) < 4 {
 		fail(80, "input", "usage: reply <message_id> <text>", "")
@@ -115,11 +125,12 @@ func printHelp() {
 
 Usage:
   poche-resend-webmail serve [-port 3090] [-daemon]
-  poche-resend-webmail seed  [-count 100]
+  poche-resend-webmail seed    [-count 100]
   poche-resend-webmail sync
-  poche-resend-webmail list   [-limit 20]
-  poche-resend-webmail read   <id>
-  poche-resend-webmail reply  <id> <text> [from]
+  poche-resend-webmail cleanup
+  poche-resend-webmail list    [-limit 20]
+  poche-resend-webmail read    <id>
+  poche-resend-webmail reply   <id> <text> [from]
   poche-resend-webmail guide | stop | status | version | help
 
 Env:
@@ -128,5 +139,9 @@ Env:
   POCHE_TOKEN              poche admin/user token
   RESEND_API_KEY           required for sync/reply/webhook fetch
   RESEND_WEBHOOK_SECRET    verify webhooks (empty = accept, dev only)
-  MAIL_FROM_ALLOWLIST      comma suffixes, default @intrane.fr`)
+  MAIL_FROM_ALLOWLIST      comma suffixes, default @intrane.fr
+  MAILBOX_RETENTION_MONTHS default 3 (fallback if mailbox field missing)
+  MAILBOX_MAX_MESSAGES     default 1000
+  MAILBOX_MAX_BYTES        default 104857600 (100 MB)
+  AUTO_CLEANUP             run cleanup after sync, default 0`)
 }

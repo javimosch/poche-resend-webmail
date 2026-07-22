@@ -48,6 +48,23 @@ func handleMessagesAPI(w http.ResponseWriter, r *http.Request) {
 
 	// /api/messages/:id[/attachments]
 	parts := strings.Split(path, "/")
+	if len(parts) == 2 && parts[1] == "star" && r.Method == http.MethodPut {
+		id := parts[0]
+		doc, err := loadDoc(p, id)
+		if err != nil {
+			writeJSON(w, 404, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		star, _ := doc["starred"].(bool)
+		star = !star
+		doc["starred"] = star
+		if _, err := p.Update("messages", id, doc); err != nil {
+			writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "starred": star})
+		return
+	}
 	if len(parts) >= 1 && parts[0] != "" && r.Method == http.MethodGet {
 		id := parts[0]
 		if len(parts) == 1 {
