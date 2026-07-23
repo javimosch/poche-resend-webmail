@@ -119,7 +119,34 @@ Reset tokens expire after 1 hour.
 
 ### Ingest routing
 
-Webhook and sync route inbound emails by `to_addr` → find matching mailbox → store with `mailbox_id`.
+Two paths for inbound email:
+
+1. **Resend webhook** (`POST /webhooks/resend`): Resend receives email on
+   verified domains (e.g. `intrane.fr`), posts to webhook. Routes by `to` field.
+
+2. **Built-in SMTP receiver** (`smtp -port 25`): Minimal SMTP server that
+   accepts email for any address, parses RFC 822, and routes to the matching
+   mailbox. Used for domains where MX records point directly to the server
+   (e.g. `lacure.enbauges.fr` → `mail.lacure.enbauges.fr` → dk1).
+
+Both paths use the same `upsertInbound` → `findOrCreateMailboxForAddress` flow.
+
+### Storage usage
+
+`GET /api/mailbox/usage` (auth: session or admin) returns:
+```json
+{"used_bytes": 1895581, "max_bytes": 524288000, "percent": 0.36, "message_count": 11}
+```
+
+The UI sidebar shows a live storage bar (fetches every 30s).
+
+### Seeding test emails
+
+```bash
+./poche-resend-webmail seed-mailbox --address contact@x.fr --count 10 --size-kb 200
+```
+
+Generates `count` emails of ~`size-kb` KB each, routed to the specified mailbox.
 Emails to addresses with no matching mailbox are dropped (not stored).
 Quota is checked at ingest time — if `used + new_message_size > max_bytes`, the email is dropped.
 

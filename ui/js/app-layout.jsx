@@ -52,6 +52,7 @@ function AppLayout({
         status={status}
         onCreateTag={onCreateTag}
         onLogout={onLogout}
+        token={token}
       />
       <section className="w-[400px] shrink-0 border-r border-paper-line flex flex-col bg-paper/40">
         <div className="px-4 py-3 border-b border-paper-line flex items-center justify-between">

@@ -23,6 +23,10 @@ func main() {
 		handleCleanupCmd()
 	case "mailbox":
 		handleMailboxCmd()
+	case "smtp":
+		handleSMTPCmd()
+	case "seed-mailbox":
+		handleSeedMailboxCmd()
 	case "reply":
 		handleReplyCmd()
 	case "list":
@@ -131,6 +135,8 @@ Usage:
   poche-resend-webmail sync
   poche-resend-webmail cleanup
   poche-resend-webmail mailbox create|list|update|delete|alias|reset-password
+  poche-resend-webmail smtp    [-port 25]          (minimal SMTP receiver for inbound)
+  poche-resend-webmail seed-mailbox --address X [--count 10 --size-kb 200]
   poche-resend-webmail list    [-limit 20]
   poche-resend-webmail read    <id>
   poche-resend-webmail reply   <id> <text> [from]

@@ -33,6 +33,7 @@ func startServer(port int) {
 	mux.HandleFunc("/api/login", handleLoginAPI)
 	mux.HandleFunc("/api/forgot-password", handleForgotPasswordAPI)
 	mux.HandleFunc("/api/reset-password", handleResetPasswordAPI)
+	mux.HandleFunc("/api/mailbox/usage", authMiddleware(handleMailboxUsageAPI))
 
 	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
 		authMode := "session"

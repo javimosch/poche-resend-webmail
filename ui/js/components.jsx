@@ -1,4 +1,4 @@
-function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onLogout }) {
+function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onLogout, token }) {
   const [newTag, setNewTag] = React.useState("");
   const [tagBusy, setTagBusy] = React.useState(false);
   const navBtn = (active, hasUnread) =>
@@ -70,11 +70,12 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
           </button>
         </form>
       </nav>
-      <div className="px-4 py-3 border-t border-paper-line text-[11px] font-mono text-ink-dim space-y-1">
+      <div className="px-4 py-3 border-t border-paper-line text-[11px] font-mono text-ink-dim space-y-2">
         <div>{total} in view</div>
         <div className={status?.poche_ok ? "text-accent" : "text-red-400"}>
           poche {status?.poche_ok ? "ok" : "down"}
         </div>
+        <StorageBar token={token} />
         {onLogout && (
           <button
             onClick={onLogout}
@@ -259,6 +260,56 @@ function MessageList({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function StorageBar({ token }) {
+  const [usage, setUsage] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!token) return;
+    let active = true;
+    const fetchUsage = () => {
+      fetch("/api/mailbox/usage", { headers: { Authorization: "Bearer " + token } })
+        .then((r) => r.json())
+        .then((j) => { if (active && j.ok) { setUsage(j.data); setLoading(false); } })
+        .catch(() => {});
+    };
+    fetchUsage();
+    const interval = setInterval(fetchUsage, 30000);
+    return () => { active = false; clearInterval(interval); };
+  }, [token]);
+
+  if (loading || !usage) return null;
+
+  const fmt = (b) => {
+    if (b >= 1073741824) return (b / 1073741824).toFixed(1) + " GB";
+    if (b >= 1048576) return (b / 1048576).toFixed(1) + " MB";
+    if (b >= 1024) return (b / 1024).toFixed(0) + " KB";
+    return b + " B";
+  };
+
+  const pct = Math.min(100, Math.round(usage.percent * 10) / 10);
+  const barWidth = Math.max(2, usage.percent);
+  const barColor = pct > 90 ? "bg-red-400" : pct > 70 ? "bg-yellow-400" : "bg-accent";
+
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-[10px] text-ink-dim">
+        <span>Storage</span>
+        <span className="tabular-nums">{fmt(usage.used_bytes)} / {fmt(usage.max_bytes)}</span>
+      </div>
+      <div className="h-1.5 bg-paper-line rounded-full overflow-hidden">
+        <div
+          className={"h-full rounded-full transition-all " + barColor}
+          style={{ width: barWidth + "%" }}
+        />
+      </div>
+      <div className="text-[10px] text-ink-dim tabular-nums">
+        {pct}% · {usage.message_count} msgs
+      </div>
     </div>
   );
 }
