@@ -54,12 +54,8 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = ensureSchema(p)
+	_ = ensureMailboxSchema(p)
 	_ = ensureTags(p)
-	mb, err := ensureMailbox(p)
-	if err != nil {
-		writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
-		return
-	}
 	re := newResendFromEnv()
 	full, err := re.getReceiving(emailID)
 	if err != nil {
@@ -67,7 +63,27 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		full = evt.Data
 		full["id"] = emailID
 	}
-	created, err := upsertInbound(p, mb, full)
+	// route to the right mailbox by recipient address
+	toAddr := firstString(full["to"])
+	if toAddr == "" {
+		toAddr = firstString(full["received_for"])
+	}
+	mbID, err := findOrCreateMailboxForAddress(p, toAddr)
+	if err != nil {
+		writeJSON(w, 500, map[string]any{"ok": false, "error": "mailbox lookup: " + err.Error()})
+		return
+	}
+	if mbID == "" {
+		writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"email_id": emailID, "created": false, "dropped": "no matching mailbox"}})
+		return
+	}
+	// quota check
+	msgSize := int64(len(strField(full, "text")) + len(strField(full, "html")))
+	if err := mailboxAllowsIngest(p, mbID, msgSize); err != nil {
+		writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"email_id": emailID, "created": false, "dropped": "quota: " + err.Error()}})
+		return
+	}
+	created, err := upsertInbound(p, mbID, full)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
 		return

@@ -3,6 +3,10 @@ const { useState, useEffect, useCallback, useRef } = React;
 function App() {
   const { cfg, err, token, setToken } = useConfig();
   const [tokenInput, setTokenInput] = useState(token || "");
+  const [address, setAddress] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginMode, setLoginMode] = useState("password");
+  const [loginError, setLoginError] = useState("");
   const [view, setViewState] = useState("inbox");
   const [tagView, setTagView] = useState("");
   const [tags, setTags] = useState([]);
@@ -239,7 +243,21 @@ function App() {
   if (err) return <div className="p-8 text-red-400">Config error: {err}</div>;
   if (!cfg) return <div className="p-8 text-ink-muted">Booting…</div>;
   if (!token) {
-    return <LoginForm tokenInput={tokenInput} setTokenInput={setTokenInput} setToken={setToken} />;
+    return (
+      <LoginForm
+        tokenInput={tokenInput}
+        setTokenInput={setTokenInput}
+        setToken={setToken}
+        address={address}
+        setAddress={setAddress}
+        password={password}
+        setPassword={setPassword}
+        loginMode={loginMode}
+        setLoginMode={setLoginMode}
+        loginError={loginError}
+        setLoginError={setLoginError}
+      />
+    );
   }
 
   return (
@@ -280,6 +298,7 @@ function App() {
       offset={offset}
       setOffset={setOffset}
       pageSize={pageSize}
+      onLogout={() => { clearWebmailToken(); setToken(""); setPassword(""); }}
     />
   );
 }

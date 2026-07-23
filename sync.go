@@ -17,11 +17,10 @@ func syncInbound(limit int) (int, error) {
 	if err := ensureSchema(p); err != nil {
 		return 0, err
 	}
-	_ = ensureTags(p)
-	mb, err := ensureMailbox(p)
-	if err != nil {
+	if err := ensureMailboxSchema(p); err != nil {
 		return 0, err
 	}
+	_ = ensureTags(p)
 	re := newResendFromEnv()
 	items, err := re.listReceiving()
 	if err != nil {
@@ -31,6 +30,7 @@ func syncInbound(limit int) (int, error) {
 		items = items[:limit]
 	}
 	n := 0
+	dropped := 0
 	for _, it := range items {
 		id, _ := it["id"].(string)
 		if id == "" {
@@ -41,7 +41,28 @@ func syncInbound(limit int) (int, error) {
 			fmt.Fprintf(os.Stderr, "{\"event\":\"sync_skip\",\"id\":%q,\"err\":%q}\n", id, err.Error())
 			continue
 		}
-		created, err := upsertInbound(p, mb, full)
+		// route to the right mailbox by recipient address
+		toAddr := firstString(full["to"])
+		if toAddr == "" {
+			toAddr = firstString(full["received_for"])
+		}
+		mbID, err := findOrCreateMailboxForAddress(p, toAddr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "{\"event\":\"sync_err\",\"id\":%q,\"err\":%q}\n", id, err.Error())
+			continue
+		}
+		if mbID == "" {
+			dropped++
+			continue
+		}
+		// quota check
+		msgSize := int64(len(strField(full, "text")) + len(strField(full, "html")))
+		if err := mailboxAllowsIngest(p, mbID, msgSize); err != nil {
+			fmt.Fprintf(os.Stderr, "{\"event\":\"sync_quota\",\"id\":%q,\"err\":%q}\n", id, err.Error())
+			dropped++
+			continue
+		}
+		created, err := upsertInbound(p, mbID, full)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "{\"event\":\"sync_err\",\"id\":%q,\"err\":%q}\n", id, err.Error())
 			continue
@@ -54,6 +75,9 @@ func syncInbound(limit int) (int, error) {
 		if _, cErr := cleanup(); cErr != nil {
 			fmt.Fprintf(os.Stderr, "{\"event\":\"auto_cleanup_err\",\"err\":%q}\n", cErr.Error())
 		}
+	}
+	if dropped > 0 {
+		fmt.Fprintf(os.Stderr, "{\"event\":\"sync_dropped\",\"count\":%d}\n", dropped)
 	}
 	return n, nil
 }

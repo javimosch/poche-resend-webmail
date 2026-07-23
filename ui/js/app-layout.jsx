@@ -35,6 +35,7 @@ function AppLayout({
   offset,
   setOffset,
   pageSize,
+  onLogout,
 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.floor(offset / pageSize) + 1;
@@ -50,6 +51,7 @@ function AppLayout({
         total={total}
         status={status}
         onCreateTag={onCreateTag}
+        onLogout={onLogout}
       />
       <section className="w-[400px] shrink-0 border-r border-paper-line flex flex-col bg-paper/40">
         <div className="px-4 py-3 border-b border-paper-line flex items-center justify-between">

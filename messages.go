@@ -12,13 +12,26 @@ func handleMessagesAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]any{"ok": false, "error": "POCHE_TOKEN missing"})
 		return
 	}
+	mbID := authMailboxID(r)
+	isAdmin := authIsAdmin(r)
 	path := strings.TrimPrefix(r.URL.Path, "/api/messages")
 	path = strings.Trim(path, "/")
+
+	// scopeWhere returns the where clause with mailbox_id filter for non-admin
+	scopeWhere := func(base string) string {
+		if isAdmin || mbID == "" {
+			return base
+		}
+		if base != "" {
+			return base + ",mailbox_id=" + mbID
+		}
+		return "mailbox_id=" + mbID
+	}
 
 	if path == "count" && r.Method == http.MethodGet {
 		has := r.URL.Query()["has_link"]
 		miss := r.URL.Query()["missing_link"]
-		where := r.URL.Query().Get("where")
+		where := scopeWhere(r.URL.Query().Get("where"))
 		n, err := p.CountLinked("messages", where, has, miss)
 		if err != nil {
 			writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
@@ -37,7 +50,7 @@ func handleMessagesAPI(w http.ResponseWriter, r *http.Request) {
 			sort = "created_at"
 		}
 		desc := q.Get("order") != "asc"
-		data, err := p.ListLinked("messages", q.Get("where"), q["has_link"], q["missing_link"], limit, offset, sort, desc)
+		data, err := p.ListLinked("messages", scopeWhere(q.Get("where")), q["has_link"], q["missing_link"], limit, offset, sort, desc)
 		if err != nil {
 			writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
 			return

@@ -32,18 +32,8 @@ func requestToken(r *http.Request) string {
 	return r.URL.Query().Get("token")
 }
 
+// authed is kept for backwards compatibility but now delegates to authMiddleware.
+// New code should use authMiddleware directly (it supports per-mailbox sessions).
 func authed(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		want := webmailToken()
-		if want == "" {
-			writeJSON(w, 500, map[string]any{"ok": false, "error": "WEBMAIL_TOKEN not set"})
-			return
-		}
-		got := requestToken(r)
-		if got == "" || got != want {
-			writeJSON(w, 401, map[string]any{"ok": false, "error": "unauthorized"})
-			return
-		}
-		next(w, r)
-	}
+	return authMiddleware(next)
 }

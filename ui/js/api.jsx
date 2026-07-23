@@ -15,6 +15,12 @@ function getWebmailToken() {
   }
 }
 
+function clearWebmailToken() {
+  try {
+    localStorage.removeItem("webmail_token");
+  } catch (_) {}
+}
+
 function setWebmailToken(t) {
   try {
     localStorage.setItem("webmail_token", t);

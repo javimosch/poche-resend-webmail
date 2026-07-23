@@ -18,21 +18,33 @@ func startServer(port int) {
 	token := ensureWebmailToken()
 	poche := newPocheFromEnv()
 
+	// ensure schema is set up before serving
+	if poche.Token != "" {
+		_ = ensureSchema(poche)
+		_ = ensureMailboxSchema(poche)
+		_ = ensureTags(poche)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true, "status": "healthy", "version": Version})
 	})
 	mux.HandleFunc("/webhooks/resend", handleWebhook)
+	mux.HandleFunc("/api/login", handleLoginAPI)
 
 	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
+		authMode := "session"
+		if os.Getenv("WEBMAIL_TOKEN") != "" && os.Getenv("ADMIN_TOKEN") == "" {
+			authMode = "token"
+		}
 		writeJSON(w, 200, map[string]any{
 			"ok":      true,
 			"version": Version,
 			"data": map[string]any{
 				"ui_port":        port,
-				"auth":           "WEBMAIL_TOKEN",
+				"auth":           authMode,
 				"resend_enabled": newResendFromEnv().enabled(),
-				"note":           "Pass Bearer or ?token= — poche credentials stay on the server.",
+				"note":           "Login with address+password, or Bearer token.",
 			},
 		})
 	})
@@ -127,14 +139,16 @@ func handleGuide() {
 		"tool":        "poche-resend-webmail",
 		"what":        "OSS self-hosted Resend webmail over poche",
 		"license":     "MIT",
-		"auth":        "WEBMAIL_TOKEN Bearer or ?token=",
+		"auth":        "session (address+password → POST /api/login → Bearer) or ADMIN_TOKEN/WEBMAIL_TOKEN (legacy admin)",
 		"store":       "poche (tags, has_link/missing_link, search)",
 		"transport":   "Resend receiving + send",
-		"webhook":     "POST /webhooks/resend (email.received)",
+		"webhook":     "POST /webhooks/resend (email.received, routed by to_addr)",
 		"attachments": "GET /api/attachments/:id/open → new tab",
-		"cleanup":     "POST /api/cleanup · retention/quota purge",
+		"cleanup":     "POST /api/cleanup · retention/quota purge (per-mailbox)",
 		"star":        "PUT /api/messages/:id/star · toggle",
 		"bulk":        "POST /api/bulk · mark_read|mark_unread|archive|unarchive|delete|star|unstar|tag|untag",
-		"cli":         []string{"serve", "seed", "sync", "cleanup", "list", "read", "reply", "guide"},
+		"mailbox":     "CLI: mailbox create|list|update|delete — per-address auth + storage caps",
+		"login":       "POST /api/login {address, password} → {token, address, max_bytes}",
+		"cli":         []string{"serve", "seed", "sync", "cleanup", "mailbox", "list", "read", "reply", "guide"},
 	})
 }

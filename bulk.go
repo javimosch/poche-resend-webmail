@@ -31,11 +31,13 @@ func handleBulkAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"ok": false, "error": "POCHE_TOKEN missing"})
 		return
 	}
+	mbID := authMailboxID(r)
+	isAdmin := authIsAdmin(r)
 
 	ids := req.IDs
 	if req.Action == "mark_read_all" || req.AllPages {
 		var err error
-		ids, err = collectIDsLinked(p, req.View, req.TagView, req.Q)
+		ids, err = collectIDsLinked(p, req.View, req.TagView, req.Q, mbID, isAdmin)
 		if err != nil {
 			writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
 			return
@@ -157,11 +159,18 @@ func viewLinks(view, tagView string) (has, missing []string) {
 	return
 }
 
-func collectIDsLinked(p *Poche, view, tagView, q string) ([]string, error) {
+func collectIDsLinked(p *Poche, view, tagView, q string, mbID string, isAdmin bool) ([]string, error) {
 	has, missing := viewLinks(view, tagView)
 	where := ""
 	if needle := sanitizeQ(q); needle != "" {
 		where = "search_text~=" + needle
+	}
+	if !isAdmin && mbID != "" {
+		if where != "" {
+			where += ",mailbox_id=" + mbID
+		} else {
+			where = "mailbox_id=" + mbID
+		}
 	}
 	out := []string{}
 	offset := 0

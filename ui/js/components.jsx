@@ -1,4 +1,4 @@
-function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag }) {
+function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onLogout }) {
   const [newTag, setNewTag] = React.useState("");
   const [tagBusy, setTagBusy] = React.useState(false);
   const navBtn = (active, hasUnread) =>
@@ -75,6 +75,14 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
         <div className={status?.poche_ok ? "text-accent" : "text-red-400"}>
           poche {status?.poche_ok ? "ok" : "down"}
         </div>
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="mt-1 text-ink-dim hover:text-accent text-[11px] underline"
+          >
+            Sign out
+          </button>
+        )}
       </div>
     </aside>
   );

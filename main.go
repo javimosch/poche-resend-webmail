@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -21,6 +21,8 @@ func main() {
 		handleSyncCmd()
 	case "cleanup":
 		handleCleanupCmd()
+	case "mailbox":
+		handleMailboxCmd()
 	case "reply":
 		handleReplyCmd()
 	case "list":
@@ -128,13 +130,15 @@ Usage:
   poche-resend-webmail seed    [-count 100]
   poche-resend-webmail sync
   poche-resend-webmail cleanup
+  poche-resend-webmail mailbox create|list|update|delete
   poche-resend-webmail list    [-limit 20]
   poche-resend-webmail read    <id>
   poche-resend-webmail reply   <id> <text> [from]
   poche-resend-webmail guide | stop | status | version | help
 
 Env:
-  WEBMAIL_TOKEN            Bearer for UI/API (generated if unset on serve)
+  WEBMAIL_TOKEN            Bearer for UI/API (generated if unset on serve; legacy admin)
+  ADMIN_TOKEN              Bearer for admin API (mailbox management; separate from WEBMAIL_TOKEN)
   POCHE_URL                default http://127.0.0.1:17781
   POCHE_TOKEN              poche admin/user token
   RESEND_API_KEY           required for sync/reply/webhook fetch

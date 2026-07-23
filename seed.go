@@ -52,6 +52,9 @@ func handleSeed(count int) {
 	if err := ensureSchema(p); err != nil {
 		fail(100, "integration", "schema setup failed: "+err.Error(), "")
 	}
+	if err := ensureMailboxSchema(p); err != nil {
+		fail(100, "integration", "mailbox schema failed: "+err.Error(), "")
+	}
 	if err := ensureTags(p); err != nil {
 		fail(100, "integration", "tags: "+err.Error(), "")
 	}
@@ -132,9 +135,6 @@ func ensureSchema(p *Poche) error {
 	_ = p.AdminIndex("message_tags", "message_id", "")
 	_ = p.AdminIndex("tags", "name", "")
 	_ = p.AdminIndex("attachments", "message_id", "")
-	if err := p.AdminExpose("mailboxes", "read,create,update"); err != nil {
-		return err
-	}
 	if err := p.AdminExpose("messages", "read,create,update,delete"); err != nil {
 		return err
 	}
