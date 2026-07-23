@@ -7,6 +7,13 @@ function App() {
   const [password, setPassword] = useState("");
   const [loginMode, setLoginMode] = useState("password");
   const [loginError, setLoginError] = useState("");
+  const [resetToken, setResetToken] = useState(() => {
+    try {
+      return new URLSearchParams(location.search).get("reset_token") || "";
+    } catch (_) { return ""; }
+  });
+  const resetMode = resetToken !== "";
+  if (resetMode && loginMode !== "reset") setLoginMode("reset");
   const [view, setViewState] = useState("inbox");
   const [tagView, setTagView] = useState("");
   const [tags, setTags] = useState([]);
@@ -256,6 +263,9 @@ function App() {
         setLoginMode={setLoginMode}
         loginError={loginError}
         setLoginError={setLoginError}
+        resetToken={resetToken}
+        setResetToken={setResetToken}
+        setResetMode={(v) => { if (!v) { setResetToken(""); setLoginMode("password"); } }}
       />
     );
   }

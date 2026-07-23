@@ -68,6 +68,8 @@ export POCHE_TOKEN=…  # admin token for poche
 ./poche-resend-webmail mailbox create \
   --address contact@lacure.enbauges.fr \
   --password "SecurePass123!" \
+  --recovery-email "arancibiajav@gmail.com" \
+  --alias "florence@lacure.enbauges.fr,tom@lacure.enbauges.fr,flo@lacure.enbauges.com" \
   --max-bytes 524288000        # 500 MB
   --max-messages 10000          # optional
   --retention-months 0          # 0 = keep forever
@@ -79,15 +81,41 @@ export POCHE_TOKEN=…  # admin token for poche
 ./poche-resend-webmail mailbox list
 ./poche-resend-webmail mailbox update --address x@y.fr --max-bytes 1073741824
 ./poche-resend-webmail mailbox update --address x@y.fr --password "newpass"
+./poche-resend-webmail mailbox update --address x@y.fr --recovery-email emergency@x.fr
 ./poche-resend-webmail mailbox update --address x@y.fr --active false   # suspend
 ./poche-resend-webmail mailbox delete --address x@y.fr --force
 ```
 
-### Client login
+### Aliases
 
-Clients log in at the webmail URL with their email address + password.
-The UI calls `POST /api/login` → gets a session token → uses it as Bearer for all API calls.
-Sessions expire after 7 days. All queries are scoped to the authenticated mailbox.
+A mailbox has one primary address + N aliases. Login and ingest routing
+check both. All aliases share the same inbox, password, and quota.
+
+```bash
+./poche-resend-webmail mailbox alias add    --mailbox contact@x.fr --alias florence@x.fr
+./poche-resend-webmail mailbox alias remove --alias florence@x.fr
+./poche-resend-webmail mailbox alias list   --mailbox contact@x.fr
+```
+
+### Forgot password
+
+Requires `--recovery-email` set on the mailbox. The reset link is sent
+via Resend to the recovery address (not the mailbox address).
+
+```bash
+# CLI (sends via Resend, or prints token if RESEND_API_KEY is unset)
+./poche-resend-webmail mailbox reset-password --address contact@x.fr
+
+# API (called by the UI "Forgot password?" link)
+POST /api/forgot-password {"address":"contact@x.fr"}
+  → sends reset link to recovery_email (always returns same response)
+
+POST /api/reset-password {"token":"...","new_password":"..."}
+  → sets new password, invalidates all sessions, token is single-use
+```
+
+The reset URL is `WEBMAIL_URL/?reset_token=TOKEN` (set `WEBMAIL_URL` env).
+Reset tokens expire after 1 hour.
 
 ### Ingest routing
 

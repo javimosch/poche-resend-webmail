@@ -113,8 +113,12 @@ func handleLoginAPI(w http.ResponseWriter, r *http.Request) {
 	_ = ensureMailboxSchema(p)
 	mb, err := findMailboxByAddress(p, req.Address)
 	if err != nil || mb == nil {
-		writeJSON(w, 401, map[string]any{"ok": false, "error": "invalid credentials"})
-		return
+		// try alias lookup
+		mb, err = findMailboxByAlias(p, req.Address)
+		if err != nil || mb == nil {
+			writeJSON(w, 401, map[string]any{"ok": false, "error": "invalid credentials"})
+			return
+		}
 	}
 	if !mb.IsActive {
 		writeJSON(w, 403, map[string]any{"ok": false, "error": "mailbox suspended"})
@@ -261,6 +265,7 @@ func getMailboxByID(p *Poche, id string) (*mailboxRecord, error) {
 }
 
 // findOrCreateMailboxForAddress routes inbound email to the right mailbox.
+// Checks both mailboxes.address and aliases.address.
 // Returns empty string if no mailbox matches (email is dropped).
 func findOrCreateMailboxForAddress(p *Poche, addr string) (string, error) {
 	addr = strings.ToLower(strings.Trim(addr, "<>"))
@@ -271,5 +276,10 @@ func findOrCreateMailboxForAddress(p *Poche, addr string) (string, error) {
 	if mb != nil {
 		return mb.ID, nil
 	}
-	return "", nil
+	// try alias lookup
+	mb, err = findMailboxByAlias(p, addr)
+	if err != nil || mb == nil {
+		return "", nil
+	}
+	return mb.ID, nil
 }

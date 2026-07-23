@@ -31,6 +31,8 @@ func startServer(port int) {
 	})
 	mux.HandleFunc("/webhooks/resend", handleWebhook)
 	mux.HandleFunc("/api/login", handleLoginAPI)
+	mux.HandleFunc("/api/forgot-password", handleForgotPasswordAPI)
+	mux.HandleFunc("/api/reset-password", handleResetPasswordAPI)
 
 	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
 		authMode := "session"
@@ -147,8 +149,10 @@ func handleGuide() {
 		"cleanup":     "POST /api/cleanup · retention/quota purge (per-mailbox)",
 		"star":        "PUT /api/messages/:id/star · toggle",
 		"bulk":        "POST /api/bulk · mark_read|mark_unread|archive|unarchive|delete|star|unstar|tag|untag",
-		"mailbox":     "CLI: mailbox create|list|update|delete — per-address auth + storage caps",
-		"login":       "POST /api/login {address, password} → {token, address, max_bytes}",
+		"mailbox":     "CLI: mailbox create|list|update|delete|alias|reset-password — per-address auth + storage caps + aliases",
+		"login":       "POST /api/login {address, password} → {token, address, max_bytes} (address can be primary or alias)",
+		"forgot":      "POST /api/forgot-password {address} → sends reset link to recovery_email",
+		"reset":       "POST /api/reset-password {token, new_password} → sets new password, invalidates sessions",
 		"cli":         []string{"serve", "seed", "sync", "cleanup", "mailbox", "list", "read", "reply", "guide"},
 	})
 }

@@ -4,10 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+func splitCSV(s string) []string {
+	return strings.Split(s, ",")
+}
 
 // ─── schema ─────────────────────────────────────────────────────────────
 
@@ -20,7 +25,7 @@ const mailboxSchemaExtra = "password_hash:string,is_active:bool,created_at:int"
 const sessionsSchema = "token:string!required!unique,mailbox_id:string!required!ref=mailboxes,expires_at:int"
 
 func ensureMailboxSchema(p *Poche) error {
-	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required!unique,retention_months:float,max_messages:int,max_bytes:int,password_hash:string,is_active:bool,created_at:int"); err != nil {
+	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required!unique,retention_months:float,max_messages:int,max_bytes:int,password_hash:string,recovery_email:string,is_active:bool,created_at:int"); err != nil {
 		return fmt.Errorf("mailboxes: %w", err)
 	}
 	if err := p.AdminSchema("sessions", sessionsSchema); err != nil {
@@ -34,6 +39,8 @@ func ensureMailboxSchema(p *Poche) error {
 	}
 	_ = p.AdminIndex("sessions", "token", "")
 	_ = p.AdminIndex("sessions", "mailbox_id", "")
+	_ = ensureAliasesSchema(p)
+	_ = ensureResetSchema(p)
 	return nil
 }
 
@@ -44,6 +51,7 @@ type mailboxRecord struct {
 	Address        string
 	Name           string
 	PasswordHash   string
+	RecoveryEmail  string
 	IsActive       bool
 	RetentionMonths float64
 	MaxMessages    int
@@ -103,6 +111,7 @@ func parseMailbox(id string, raw json.RawMessage) *mailboxRecord {
 		Address:         stringField(doc, "address"),
 		Name:            stringField(doc, "name"),
 		PasswordHash:    stringField(doc, "password_hash"),
+		RecoveryEmail:   stringField(doc, "recovery_email"),
 		IsActive:        boolField(doc, "is_active"),
 		RetentionMonths: numField(doc, "retention_months"),
 		MaxMessages:     int(numField(doc, "max_messages")),
@@ -116,7 +125,7 @@ func parseMailbox(id string, raw json.RawMessage) *mailboxRecord {
 
 func handleMailboxCmd() {
 	if len(os.Args) < 3 {
-		fail(80, "input", "usage: mailbox create|list|update|delete", "")
+		fail(80, "input", "usage: mailbox create|list|update|delete|alias|reset-password", "")
 	}
 	sub := os.Args[2]
 	switch sub {
@@ -128,8 +137,12 @@ func handleMailboxCmd() {
 		mailboxUpdateCmd()
 	case "delete":
 		mailboxDeleteCmd()
+	case "alias":
+		handleAliasCmd()
+	case "reset-password":
+		handleResetPasswordCmd()
 	default:
-		fail(80, "input", "unknown mailbox subcommand: "+sub, "mailbox create|list|update|delete")
+		fail(80, "input", "unknown mailbox subcommand: "+sub, "mailbox create|list|update|delete|alias|reset-password")
 	}
 }
 
@@ -141,9 +154,14 @@ func mailboxCreateCmd() {
 	maxBytes := fs.Int64("max-bytes", 100*1024*1024, "storage cap in bytes")
 	maxMessages := fs.Int("max-messages", 1000, "max message count")
 	retention := fs.Float64("retention-months", 3, "retention (0 = keep forever)")
+	recoveryEmail := fs.String("recovery-email", "", "emergency address for password resets")
+	aliasCSV := fs.String("alias", "", "comma-separated alias addresses")
 	_ = fs.Parse(os.Args[3:])
 	if *addr == "" || *password == "" {
 		fail(80, "input", "--address and --password required", "mailbox create --address x@y.fr --password secret --max-bytes 524288000")
+	}
+	if *recoveryEmail == "" {
+		fail(80, "input", "--recovery-email required (for password resets)", "mailbox create --address x@y.fr --password secret --recovery-email emergency@x.fr")
 	}
 	if *name == "" {
 		*name = *addr
@@ -171,6 +189,7 @@ func mailboxCreateCmd() {
 		"name":             *name,
 		"address":          *addr,
 		"password_hash":    string(hash),
+		"recovery_email":   *recoveryEmail,
 		"is_active":        true,
 		"retention_months": *retention,
 		"max_messages":     *maxMessages,
@@ -184,14 +203,31 @@ func mailboxCreateCmd() {
 	var wrap map[string]any
 	_ = json.Unmarshal(raw, &wrap)
 	id, _ := wrap["_id"].(string)
+	// add aliases
+	var aliases []string
+	if *aliasCSV != "" {
+		for _, a := range splitCSV(*aliasCSV) {
+			a = strings.ToLower(strings.TrimSpace(a))
+			if a == "" || a == *addr {
+				continue
+			}
+			if err := addAlias(p, id, a); err != nil {
+				fmt.Fprintf(os.Stderr, "{\"event\":\"alias_err\",\"alias\":%q,\"err\":%q}\n", a, err.Error())
+				continue
+			}
+			aliases = append(aliases, a)
+		}
+	}
 	outOK(map[string]any{
-		"created":       true,
-		"id":            id,
-		"address":       *addr,
-		"name":          *name,
-		"max_bytes":     *maxBytes,
-		"max_messages":  *maxMessages,
+		"created":          true,
+		"id":               id,
+		"address":          *addr,
+		"name":             *name,
+		"max_bytes":        *maxBytes,
+		"max_messages":     *maxMessages,
 		"retention_months": *retention,
+		"recovery_email":   *recoveryEmail,
+		"aliases":          aliases,
 	})
 }
 
@@ -200,23 +236,27 @@ func mailboxListCmd() {
 	if p.Token == "" {
 		fail(80, "input", "set POCHE_TOKEN", "")
 	}
+	_ = ensureAliasesSchema(p)
 	mboxes, err := listAllMailboxes(p)
 	if err != nil {
 		fail(100, "integration", "list: "+err.Error(), "")
 	}
 	type mbOut struct {
-		ID              string `json:"id"`
-		Address         string `json:"address"`
-		Name            string `json:"name"`
-		IsActive        bool   `json:"is_active"`
-		RetentionMonths float64 `json:"retention_months"`
-		MaxMessages     int    `json:"max_messages"`
-		MaxBytes        int64  `json:"max_bytes"`
-		HasPassword     bool   `json:"has_password"`
-		CreatedAt       int64  `json:"created_at"`
+		ID              string   `json:"id"`
+		Address         string   `json:"address"`
+		Name            string   `json:"name"`
+		IsActive        bool     `json:"is_active"`
+		RetentionMonths float64  `json:"retention_months"`
+		MaxMessages     int      `json:"max_messages"`
+		MaxBytes        int64    `json:"max_bytes"`
+		HasPassword     bool     `json:"has_password"`
+		RecoveryEmail   string   `json:"recovery_email"`
+		Aliases         []string `json:"aliases"`
+		CreatedAt       int64    `json:"created_at"`
 	}
 	out := make([]mbOut, 0, len(mboxes))
 	for _, mb := range mboxes {
+		aliases, _ := listAliases(p, mb.ID)
 		out = append(out, mbOut{
 			ID:              mb.ID,
 			Address:         mb.Address,
@@ -226,6 +266,8 @@ func mailboxListCmd() {
 			MaxMessages:     mb.MaxMessages,
 			MaxBytes:        mb.MaxBytes,
 			HasPassword:     mb.PasswordHash != "",
+			RecoveryEmail:   mb.RecoveryEmail,
+			Aliases:         aliases,
 			CreatedAt:       mb.CreatedAt,
 		})
 	}
@@ -240,6 +282,7 @@ func mailboxUpdateCmd() {
 	maxMessages := fs.Int("max-messages", 0, "max message count (0 = unchanged)")
 	retention := fs.Float64("retention-months", -1, "retention (negative = unchanged)")
 	active := fs.String("active", "", "set active state: true|false (empty = unchanged)")
+	recoveryEmail := fs.String("recovery-email", "", "set recovery email (empty = unchanged)")
 	_ = fs.Parse(os.Args[3:])
 	if *addr == "" {
 		fail(80, "input", "--address required", "")
@@ -248,9 +291,14 @@ func mailboxUpdateCmd() {
 	if p.Token == "" {
 		fail(80, "input", "set POCHE_TOKEN", "")
 	}
+	_ = ensureAliasesSchema(p)
 	mb, err := findMailboxByAddress(p, *addr)
 	if err != nil || mb == nil {
-		fail(90, "not_found", "mailbox not found: "+*addr, "")
+		// try alias lookup
+		mb, err = findMailboxByAlias(p, *addr)
+		if err != nil || mb == nil {
+			fail(90, "not_found", "mailbox not found: "+*addr, "")
+		}
 	}
 	doc := mb.Doc
 	if *password != "" {
@@ -274,10 +322,13 @@ func mailboxUpdateCmd() {
 	} else if *active == "false" {
 		doc["is_active"] = false
 	}
+	if *recoveryEmail != "" {
+		doc["recovery_email"] = *recoveryEmail
+	}
 	if _, err := p.Update("mailboxes", mb.ID, doc); err != nil {
 		fail(100, "integration", "update: "+err.Error(), "")
 	}
-	outOK(map[string]any{"updated": true, "address": *addr})
+	outOK(map[string]any{"updated": true, "address": mb.Address})
 }
 
 func mailboxDeleteCmd() {
@@ -306,6 +357,8 @@ func mailboxDeleteCmd() {
 	}
 	// delete sessions
 	_ = deleteSessionsByMailbox(p, mb.ID)
+	// delete aliases
+	_ = deleteAliasesByMailbox(p, mb.ID)
 	// delete mailbox
 	if err := p.Delete("mailboxes", mb.ID); err != nil {
 		fail(100, "integration", "delete: "+err.Error(), "")

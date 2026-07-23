@@ -130,7 +130,7 @@ Usage:
   poche-resend-webmail seed    [-count 100]
   poche-resend-webmail sync
   poche-resend-webmail cleanup
-  poche-resend-webmail mailbox create|list|update|delete
+  poche-resend-webmail mailbox create|list|update|delete|alias|reset-password
   poche-resend-webmail list    [-limit 20]
   poche-resend-webmail read    <id>
   poche-resend-webmail reply   <id> <text> [from]
