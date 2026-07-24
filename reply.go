@@ -45,25 +45,42 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride string) 
 	if from == "" {
 		from, _ = doc["to_addr"].(string)
 	}
+	// If the derived from address is missing, disallowed by domain allowlist, or
+	// does not belong to the mailbox (e.g. stale 'inbox@local' from old payloads),
+	// fall back to the mailbox primary address so replies can still be sent.
+	mbID, _ := doc["mailbox_id"].(string)
+	pForAddr := newPocheFromEnv()
+	var mb *mailboxRecord
+	if mbID != "" {
+		mb, _ = getMailboxByID(pForAddr, mbID)
+	}
+	isMailboxAddr := false
+	if mb != nil {
+		for _, a := range mailboxAllAddresses(pForAddr, mb) {
+			if strings.EqualFold(a, from) {
+				isMailboxAddr = true
+				break
+			}
+		}
+	}
+	if from == "" || !fromAllowed(from) || (mb != nil && !isMailboxAddr) {
+		if mb != nil && fromAllowed(mb.Address) {
+			from = mb.Address
+		}
+	}
 	if from == "" || !fromAllowed(from) {
 		return nil, fmt.Errorf("from not allowed (set MAIL_FROM_ALLOWLIST): %s", from)
 	}
-	// verify the from address belongs to this mailbox (primary or alias)
-	mbID, _ := doc["mailbox_id"].(string)
-	if mbID != "" {
-		mb, err := getMailboxByID(newPocheFromEnv(), mbID)
-		if err == nil && mb != nil {
-			allowed := mailboxAllAddresses(newPocheFromEnv(), mb)
-			found := false
-			for _, a := range allowed {
-				if strings.EqualFold(a, from) {
-					found = true
-					break
-				}
+	if mb != nil {
+		found := false
+		for _, a := range mailboxAllAddresses(pForAddr, mb) {
+			if strings.EqualFold(a, from) {
+				found = true
+				break
 			}
-			if !found {
-				return nil, fmt.Errorf("from address %s does not belong to this mailbox", from)
-			}
+		}
+		if !found {
+			return nil, fmt.Errorf("from address %s does not belong to this mailbox", from)
 		}
 	}
 	to := toOverride
@@ -96,9 +113,9 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride string) 
 		return nil, err
 	}
 	sentID, _ := sent["id"].(string)
-	mb, _ := doc["mailbox_id"].(string)
+	sentMbID, _ := doc["mailbox_id"].(string)
 	outDoc := map[string]any{
-		"mailbox_id":   mb,
+		"mailbox_id":   sentMbID,
 		"from_addr":    from,
 		"to_addr":      to,
 		"subject":      subj,

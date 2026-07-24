@@ -42,9 +42,9 @@ func syncInbound(limit int) (int, error) {
 			continue
 		}
 		// route to the right mailbox by recipient address
-		toAddr := firstString(full["to"])
+		toAddr := emailField(full, "to")
 		if toAddr == "" {
-			toAddr = firstString(full["received_for"])
+			toAddr = emailField(full, "received_for")
 		}
 		mbID, err := findOrCreateMailboxForAddress(p, toAddr)
 		if err != nil {
@@ -94,18 +94,18 @@ func upsertInbound(p *Poche, mailboxID string, doc map[string]any) (created bool
 	if existing != "" {
 		return false, nil
 	}
-	from := strField(doc, "from")
+	from := emailField(doc, "from")
 	if from == "" {
 		from = "unknown@resend.local"
 	}
-	to := firstString(doc["to"])
+	to := emailField(doc, "to")
 	if to == "" {
-		to = firstString(doc["received_for"])
+		to = emailField(doc, "received_for")
 	}
 	if to == "" {
 		to = "inbox@local"
 	}
-	rf := firstString(doc["received_for"])
+	rf := emailField(doc, "received_for")
 	if rf == "" {
 		rf = to
 	}
@@ -210,6 +210,28 @@ func upsertAttachments(p *Poche, messageID string, doc map[string]any) error {
 func strField(m map[string]any, k string) string {
 	v, _ := m[k].(string)
 	return v
+}
+
+// emailFromValue extracts an email address from Resend's object/array format:
+// string, {"email":"..."}, or [{"email":"..."}]. Also strips "Name <email>".
+func emailFromValue(v any) string {
+	switch t := v.(type) {
+	case string:
+		return emailOf(t)
+	case map[string]any:
+		if e, ok := t["email"].(string); ok {
+			return emailOf(e)
+		}
+	case []any:
+		if len(t) > 0 {
+			return emailFromValue(t[0])
+		}
+	}
+	return ""
+}
+
+func emailField(m map[string]any, k string) string {
+	return emailFromValue(m[k])
 }
 
 func firstString(v any) string {

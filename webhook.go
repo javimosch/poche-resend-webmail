@@ -64,9 +64,9 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		full["id"] = emailID
 	}
 	// route to the right mailbox by recipient address
-	toAddr := firstString(full["to"])
+	toAddr := emailField(full, "to")
 	if toAddr == "" {
-		toAddr = firstString(full["received_for"])
+		toAddr = emailField(full, "received_for")
 	}
 	mbID, err := findOrCreateMailboxForAddress(p, toAddr)
 	if err != nil {
