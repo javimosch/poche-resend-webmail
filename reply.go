@@ -117,7 +117,10 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride string) 
 		"references":   mid,
 		"created_at":   time.Now().UnixMilli(),
 	}
-	_, _ = p.Create("messages", outDoc)
+	_, err = p.Create("messages", outDoc)
+	if err == nil {
+		updateMailboxUsage(p, mbID, 1, messageSizeBytes(outDoc))
+	}
 	return map[string]any{
 		"sent_id": sentID,
 		"from":    from,

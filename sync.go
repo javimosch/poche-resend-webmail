@@ -152,6 +152,7 @@ func upsertInbound(p *Poche, mailboxID string, doc map[string]any) (created bool
 	if err != nil {
 		return false, err
 	}
+	updateMailboxUsage(p, mailboxID, 1, messageSizeBytes(msg))
 	var wrap map[string]any
 	_ = json.Unmarshal(raw, &wrap)
 	localID, _ := wrap["_id"].(string)

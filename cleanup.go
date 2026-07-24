@@ -179,12 +179,30 @@ func loadMailboxMessages(p *Poche, mailboxID string) ([]msgSum, int, int64, erro
 }
 
 func deleteMessageWithLinks(p *Poche, messageID string) error {
+	// Load the message before deleting it so we can update the mailbox usage
+	// counters by the exact byte delta.
+	var mailboxID string
+	var deltaBytes int64
+	if raw, err := p.Get("messages", messageID); err == nil {
+		doc := map[string]any{}
+		_ = json.Unmarshal(raw, &doc)
+		if s, ok := doc["mailbox_id"].(string); ok {
+			mailboxID = s
+		}
+		deltaBytes = messageSizeBytes(doc)
+	}
 	for _, coll := range []string{"message_tags", "attachments"} {
 		if err := deleteByMessageID(p, coll, messageID); err != nil {
 			logCleanupEvent("link_delete_err", map[string]any{"collection": coll, "message_id": messageID, "err": err.Error()})
 		}
 	}
-	return p.Delete("messages", messageID)
+	if err := p.Delete("messages", messageID); err != nil {
+		return err
+	}
+	if mailboxID != "" {
+		updateMailboxUsage(p, mailboxID, -1, -deltaBytes)
+	}
+	return nil
 }
 
 func deleteByMessageID(p *Poche, coll, messageID string) error {

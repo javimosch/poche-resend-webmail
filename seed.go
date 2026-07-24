@@ -106,6 +106,8 @@ func handleSeed(count int) {
 		created += n
 		fmt.Fprintf(os.Stderr, "{\"event\":\"seed_progress\",\"created\":%d,\"target\":%d}\n", existing+created, count)
 	}
+	// Recalc and persist mailbox usage counters once after bulk seeding.
+	_, _, _ = mailboxUsage(p, mb)
 	outOK(map[string]any{"seeded": true, "created": created, "total": existing + created, "mailbox": mb})
 }
 

@@ -226,8 +226,31 @@ func authIsAdmin(r *http.Request) bool {
 // ─── mailbox quota helpers ──────────────────────────────────────────────
 
 func mailboxUsage(p *Poche, mailboxID string) (count int, bytes int64, err error) {
+	raw, err := p.Get("mailboxes", mailboxID)
+	if err != nil {
+		return 0, 0, err
+	}
+	mb := parseMailbox(mailboxID, raw)
+	// Fast path: counters are maintained on the mailbox doc. If the keys are
+	// present, return them. This avoids loading every message body into memory.
+	if _, hasCount := mb.Doc["message_count"]; hasCount {
+		if _, hasBytes := mb.Doc["used_bytes"]; hasBytes {
+			return mb.MessageCount, mb.UsedBytes, nil
+		}
+	}
+	// Migration/fallback: existing mailboxes don't have counters. Recalc once
+	// from message bodies and persist them on the mailbox doc.
 	_, count, bytes, err = loadMailboxMessages(p, mailboxID)
-	return
+	if err != nil {
+		return 0, 0, err
+	}
+	doc := mb.Doc
+	doc["message_count"] = count
+	doc["used_bytes"] = bytes
+	if _, err := p.Update("mailboxes", mailboxID, doc); err != nil {
+		fmt.Fprintf(os.Stderr, "{\"event\":\"usage_persist_err\",\"mailbox\":%q,\"err\":%q}\n", mailboxID, err.Error())
+	}
+	return count, bytes, nil
 }
 
 func mailboxAllowsIngest(p *Poche, mailboxID string, newSize int64) error {

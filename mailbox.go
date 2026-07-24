@@ -25,7 +25,7 @@ const mailboxSchemaExtra = "password_hash:string,is_active:bool,created_at:int"
 const sessionsSchema = "token:string!required!unique,mailbox_id:string!required!ref=mailboxes,expires_at:int"
 
 func ensureMailboxSchema(p *Poche) error {
-	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required!unique,retention_months:float,max_messages:int,max_bytes:int,password_hash:string,recovery_email:string,is_active:bool,created_at:int"); err != nil {
+	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required!unique,retention_months:float,max_messages:int,max_bytes:int,message_count:int,used_bytes:int,password_hash:string,recovery_email:string,is_active:bool,created_at:int"); err != nil {
 		return fmt.Errorf("mailboxes: %w", err)
 	}
 	if err := p.AdminSchema("sessions", sessionsSchema); err != nil {
@@ -56,6 +56,8 @@ type mailboxRecord struct {
 	RetentionMonths float64
 	MaxMessages    int
 	MaxBytes       int64
+	MessageCount   int
+	UsedBytes      int64
 	CreatedAt      int64
 	Doc            map[string]any
 }
@@ -116,6 +118,8 @@ func parseMailbox(id string, raw json.RawMessage) *mailboxRecord {
 		RetentionMonths: numField(doc, "retention_months"),
 		MaxMessages:     int(numField(doc, "max_messages")),
 		MaxBytes:        int64Field(doc, "max_bytes"),
+		MessageCount:    int(numField(doc, "message_count")),
+		UsedBytes:       int64Field(doc, "used_bytes"),
 		CreatedAt:       int64Field(doc, "created_at"),
 	}
 	return mb
@@ -364,4 +368,44 @@ func mailboxDeleteCmd() {
 		fail(100, "integration", "delete: "+err.Error(), "")
 	}
 	outOK(map[string]any{"deleted": true, "address": *addr, "messages_removed": len(msgs)})
+}
+
+// messageSizeBytes returns the counted byte size for a message.
+// It intentionally mirrors loadMailboxMessages: body_text + body_html.
+// Attachments are not counted here (same as the previous implementation).
+func messageSizeBytes(doc map[string]any) int64 {
+	size := int64(0)
+	if s, ok := doc["body_text"].(string); ok {
+		size += int64(len(s))
+	}
+	if s, ok := doc["body_html"].(string); ok {
+		size += int64(len(s))
+	}
+	return size
+}
+
+// updateMailboxUsage applies a delta to the stored message_count and used_bytes
+// on the mailbox doc. It is a best-effort write; errors are logged to stderr
+// but not returned, because quota/usage should not block message operations.
+func updateMailboxUsage(p *Poche, mailboxID string, deltaCount int, deltaBytes int64) {
+	raw, err := p.Get("mailboxes", mailboxID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "{\"event\":\"usage_update_err\",\"mailbox\":%q,\"err\":%q}\n", mailboxID, err.Error())
+		return
+	}
+	mb := parseMailbox(mailboxID, raw)
+	newCount := mb.MessageCount + deltaCount
+	if newCount < 0 {
+		newCount = 0
+	}
+	newBytes := mb.UsedBytes + deltaBytes
+	if newBytes < 0 {
+		newBytes = 0
+	}
+	doc := mb.Doc
+	doc["message_count"] = newCount
+	doc["used_bytes"] = newBytes
+	if _, err := p.Update("mailboxes", mailboxID, doc); err != nil {
+		fmt.Fprintf(os.Stderr, "{\"event\":\"usage_update_err\",\"mailbox\":%q,\"err\":%q}\n", mailboxID, err.Error())
+	}
 }

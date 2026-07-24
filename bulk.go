@@ -76,8 +76,7 @@ func handleBulkAPI(w http.ResponseWriter, r *http.Request) {
 			}
 			err = removeTag(p, id, req.Tag)
 		case "delete":
-			_ = removeAllTags(p, id)
-			err = p.Delete("messages", id)
+			err = deleteMessageWithLinks(p, id)
 		default:
 			writeJSON(w, 400, map[string]any{"ok": false, "error": "unknown action"})
 			return
