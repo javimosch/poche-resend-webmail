@@ -11,6 +11,7 @@ function MessagePane({
   onReply,
   archived,
   busy,
+  account,
 }) {
   const [reply, setReply] = React.useState("");
   React.useEffect(() => {
@@ -108,6 +109,10 @@ function MessagePane({
             onReply(reply.trim()).then(() => setReply(""));
           }}
         >
+          <div className="text-xs text-ink-dim">
+            <span className="text-ink-dim/70">From </span>
+            <span className="text-ink">{account?.address || msg.received_for || msg.to_addr || "—"}</span>
+          </div>
           <textarea
             value={reply}
             onChange={(e) => setReply(e.target.value)}

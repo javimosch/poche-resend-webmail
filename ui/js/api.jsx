@@ -27,17 +27,51 @@ function setWebmailToken(t) {
   } catch (_) {}
 }
 
+function getWebmailAccount() {
+  try {
+    const raw = localStorage.getItem("webmail_account");
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function setWebmailAccount(account) {
+  try {
+    if (account) {
+      localStorage.setItem("webmail_account", JSON.stringify(account));
+    } else {
+      localStorage.removeItem("webmail_account");
+    }
+  } catch (_) {}
+}
+
+function clearWebmailAccount() {
+  try {
+    localStorage.removeItem("webmail_account");
+  } catch (_) {}
+}
+
 function useConfig() {
   const [cfg, setCfg] = React.useState(null);
   const [err, setErr] = React.useState("");
   const [token, setToken] = React.useState(getWebmailToken);
+  const [account, setAccount] = React.useState(getWebmailAccount);
   React.useEffect(() => {
     fetch("/api/config")
       .then((r) => r.json())
       .then((j) => setCfg(j.data || j))
       .catch((e) => setErr(String(e)));
   }, []);
-  return { cfg, err, token, setToken: (t) => { setWebmailToken(t); setToken(t); } };
+  return {
+    cfg,
+    err,
+    token,
+    account,
+    setToken: (t) => { setWebmailToken(t); setToken(t); },
+    setAccount: (a) => { setWebmailAccount(a); setAccount(a); },
+    clearAuth: () => { clearWebmailToken(); clearWebmailAccount(); setToken(""); setAccount(null); },
+  };
 }
 
 function apiFetch(token, path, opts = {}) {

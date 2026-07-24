@@ -1,4 +1,4 @@
-function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onLogout, token }) {
+function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onLogout, token, account }) {
   const [newTag, setNewTag] = React.useState("");
   const [tagBusy, setTagBusy] = React.useState(false);
   const navBtn = (active, hasUnread) =>
@@ -71,6 +71,14 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
         </form>
       </nav>
       <div className="px-4 py-3 border-t border-paper-line text-[11px] font-mono text-ink-dim space-y-2">
+        {account?.address && (
+          <div className="space-y-0.5">
+            <div className="text-ink-muted truncate" title={account.address}>
+              {account.address}
+            </div>
+            {account.name && <div className="truncate" title={account.name}>{account.name}</div>}
+          </div>
+        )}
         <div>{total} in view</div>
         <div className={status?.poche_ok ? "text-accent" : "text-red-400"}>
           poche {status?.poche_ok ? "ok" : "down"}

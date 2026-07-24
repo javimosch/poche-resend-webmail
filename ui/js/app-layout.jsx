@@ -35,6 +35,7 @@ function AppLayout({
   offset,
   setOffset,
   pageSize,
+  account,
   onLogout,
 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -53,6 +54,7 @@ function AppLayout({
         onCreateTag={onCreateTag}
         onLogout={onLogout}
         token={token}
+        account={account}
       />
       <section className="w-[400px] shrink-0 border-r border-paper-line flex flex-col bg-paper/40">
         <div className="px-4 py-3 border-b border-paper-line flex items-center justify-between">
@@ -117,6 +119,7 @@ function AppLayout({
           onUnarchive={onUnarchive}
           onDelete={onDelete}
           onReply={onReply}
+          account={account}
         />
       </main>
     </div>

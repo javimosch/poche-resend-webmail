@@ -1,4 +1,4 @@
-function LoginForm({ tokenInput, setTokenInput, setToken, address, setAddress, password, setPassword, loginMode, setLoginMode, loginError, setLoginError, resetToken, setResetToken, setResetMode }) {
+function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, setAddress, password, setPassword, loginMode, setLoginMode, loginError, setLoginError, resetToken, setResetToken, setResetMode }) {
   const [forgotSent, setForgotSent] = React.useState(false);
 
   const onLogin = (e) => {
@@ -15,7 +15,12 @@ function LoginForm({ tokenInput, setTokenInput, setToken, address, setAddress, p
         if (!j.ok) throw new Error(j.error?.message || j.error || "login failed");
         return j.data;
       })
-      .then((data) => setToken(data.token))
+      .then((data) => {
+        setToken(data.token);
+        if (data.address) {
+          setAccount({ address: data.address, name: data.name || "" });
+        }
+      })
       .catch((e) => setLoginError(String(e.message || e)));
   };
 

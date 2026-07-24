@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback, useRef } = React;
 
 function App() {
-  const { cfg, err, token, setToken } = useConfig();
+  const { cfg, err, token, account, setToken, setAccount, clearAuth } = useConfig();
   const [tokenInput, setTokenInput] = useState(token || "");
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
@@ -255,6 +255,7 @@ function App() {
         tokenInput={tokenInput}
         setTokenInput={setTokenInput}
         setToken={setToken}
+        setAccount={setAccount}
         address={address}
         setAddress={setAddress}
         password={password}
@@ -308,7 +309,8 @@ function App() {
       offset={offset}
       setOffset={setOffset}
       pageSize={pageSize}
-      onLogout={() => { clearWebmailToken(); setToken(""); setPassword(""); }}
+      account={account}
+      onLogout={() => { clearAuth(); setPassword(""); }}
     />
   );
 }
