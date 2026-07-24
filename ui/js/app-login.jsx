@@ -1,5 +1,14 @@
 function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, setAddress, password, setPassword, loginMode, setLoginMode, loginError, setLoginError, resetToken, setResetToken, setResetMode }) {
   const [forgotSent, setForgotSent] = React.useState(false);
+  const [remember, setRemember] = React.useState(() => !!getRememberedCreds());
+
+  React.useEffect(() => {
+    const saved = getRememberedCreds();
+    if (saved) {
+      setAddress(saved.address);
+      setPassword(saved.password);
+    }
+  }, [setAddress, setPassword]);
 
   const onLogin = (e) => {
     e.preventDefault();
@@ -19,6 +28,11 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
         setToken(data.token);
         if (data.address) {
           setAccount({ address: data.address, name: data.name || "" });
+        }
+        if (remember) {
+          setRememberedCreds({ address: address.trim(), password: password.trim() });
+        } else {
+          clearRememberedCreds();
         }
       })
       .catch((e) => setLoginError(String(e.message || e)));
@@ -171,6 +185,15 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
           className="w-full bg-paper border border-paper-line rounded px-2 py-1.5 text-sm"
           placeholder="password"
         />
+        <label className="flex items-center gap-2 text-xs text-ink-dim cursor-pointer">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            className="accent-accent"
+          />
+          Remember me
+        </label>
         <button type="submit" className="w-full text-sm px-3 py-1.5 border border-paper-line rounded hover:bg-paper-line">
           Sign in
         </button>

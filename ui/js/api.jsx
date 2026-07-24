@@ -52,6 +52,36 @@ function clearWebmailAccount() {
   } catch (_) {}
 }
 
+function getRememberedCreds() {
+  try {
+    const raw = localStorage.getItem("webmail_remember");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.address === "string" && typeof parsed.password === "string") {
+      return parsed;
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function setRememberedCreds(creds) {
+  try {
+    if (creds && creds.address) {
+      localStorage.setItem("webmail_remember", JSON.stringify(creds));
+    } else {
+      localStorage.removeItem("webmail_remember");
+    }
+  } catch (_) {}
+}
+
+function clearRememberedCreds() {
+  try {
+    localStorage.removeItem("webmail_remember");
+  } catch (_) {}
+}
+
 function useConfig() {
   const [cfg, setCfg] = React.useState(null);
   const [err, setErr] = React.useState("");

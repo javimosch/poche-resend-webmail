@@ -76,7 +76,9 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
             <div className="text-ink-muted truncate" title={account.address}>
               {account.address}
             </div>
-            {account.name && <div className="truncate" title={account.name}>{account.name}</div>}
+            {account.name && account.name !== account.address && (
+              <div className="truncate" title={account.name}>{account.name}</div>
+            )}
           </div>
         )}
         <div>{total} in view</div>
