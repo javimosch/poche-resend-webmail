@@ -31,6 +31,8 @@ func main() {
 		handleReplyCmd()
 	case "send", "compose":
 		handleComposeCmd()
+	case "sanitize":
+		handleSanitizeCmd()
 	case "list":
 		handleListCmd()
 	case "read":

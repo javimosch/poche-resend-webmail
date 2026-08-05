@@ -141,12 +141,12 @@ function formatWhen(ms) {
   });
 }
 
+// Body HTML is sanitized server-side before storage. Do NOT un-escape
+// sequences here: JSON.parse already decodes genuine \u escapes, so any
+// remaining "<" is literal text the sender wrote — turning it back into
+// a tag would rebuild markup that sanitizing had just neutralized.
 function decodeBodyHtml(s) {
-  if (!s || typeof s !== "string") return "";
-  return s
-    .replace(/\\u003c/gi, "<")
-    .replace(/\\u003e/gi, ">")
-    .replace(/\\u0026/gi, "&");
+  return typeof s === "string" ? s : "";
 }
 
 function rowFromItem(it) {

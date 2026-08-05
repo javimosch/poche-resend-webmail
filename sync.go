@@ -163,7 +163,9 @@ func upsertInbound(p *Poche, mailboxID string, doc map[string]any) (created bool
 		subj = "(no subject)"
 	}
 	text := strField(doc, "text")
-	html := strField(doc, "html")
+	// Sender-controlled markup is sanitized before it is ever stored, so no
+	// render path has to trust it.
+	html := sanitizeEmailHTML(strField(doc, "html"))
 	mid := strField(doc, "message_id")
 	preview := text
 	if len(preview) > 160 {

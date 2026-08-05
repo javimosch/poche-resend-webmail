@@ -33,6 +33,52 @@ func webhookSecretForMailbox(mb *mailboxRecord) string {
 	return os.Getenv("RESEND_WEBHOOK_SECRET")
 }
 
+// webmailURLForMailbox is the base URL a tenant's users log in at — it decides
+// the host in password-reset links, so a client never sees another tenant's
+// hostname.
+func webmailURLForMailbox(mb *mailboxRecord) string {
+	if mb != nil && mb.WebmailURL != "" {
+		return strings.TrimRight(mb.WebmailURL, "/")
+	}
+	return strings.TrimRight(envOr("WEBMAIL_URL", "http://localhost:3090"), "/")
+}
+
+// resetFromForMailbox picks the sender for a reset email. A mailbox on its own
+// Resend account cannot send as the shared RESET_FROM address (that domain is
+// verified in a different account), so it falls back to its own address.
+func resetFromForMailbox(mb *mailboxRecord) string {
+	if mb != nil {
+		if mb.ResetFrom != "" {
+			return mb.ResetFrom
+		}
+		if mb.ResendAPIKey != "" {
+			return mb.Address
+		}
+	}
+	return envOr("RESET_FROM", "noreply@intrane.fr")
+}
+
+// sendResetEmail delivers a reset link through the mailbox's own transport.
+func sendResetEmail(mb *mailboxRecord, recovery, token string) error {
+	re := resendForMailbox(mb)
+	if !re.enabled() {
+		return fmt.Errorf("RESEND_API_KEY not set")
+	}
+	resetURL := webmailURLForMailbox(mb) + "/?reset_token=" + token
+	_, err := re.sendEmail(map[string]any{
+		"from":    resetFromForMailbox(mb),
+		"to":      []string{recovery},
+		"subject": "Password reset — poche webmail",
+		"text": fmt.Sprintf(
+			"A password reset was requested for %s.\n\n"+
+				"Click the link below to set a new password (valid 1 hour):\n%s\n\n"+
+				"If you did not request this, ignore this email.",
+			mb.Address, resetURL,
+		),
+	})
+	return err
+}
+
 // maskSecret renders a credential for human/agent output without disclosing it.
 func maskSecret(s string) string {
 	if s == "" {

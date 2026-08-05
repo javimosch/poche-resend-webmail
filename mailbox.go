@@ -25,7 +25,7 @@ const mailboxSchemaExtra = "password_hash:string,is_active:bool,created_at:int"
 const sessionsSchema = "token:string!required!unique,mailbox_id:string!required!ref=mailboxes,expires_at:int"
 
 func ensureMailboxSchema(p *Poche) error {
-	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required!unique,retention_months:float,max_messages:int,max_bytes:int,message_count:int,used_bytes:int,password_hash:string,recovery_email:string,resend_api_key:string,resend_webhook_secret:string,is_active:bool,created_at:int"); err != nil {
+	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required!unique,retention_months:float,max_messages:int,max_bytes:int,message_count:int,used_bytes:int,password_hash:string,recovery_email:string,resend_api_key:string,resend_webhook_secret:string,webmail_url:string,reset_from:string,is_active:bool,created_at:int"); err != nil {
 		return fmt.Errorf("mailboxes: %w", err)
 	}
 	if err := p.AdminSchema("sessions", sessionsSchema); err != nil {
@@ -55,14 +55,18 @@ type mailboxRecord struct {
 	// Per-tenant Resend credentials; empty ⇒ fall back to the env key/secret.
 	ResendAPIKey        string
 	ResendWebhookSecret string
-	IsActive            bool
-	RetentionMonths     float64
-	MaxMessages         int
-	MaxBytes            int64
-	MessageCount        int
-	UsedBytes           int64
-	CreatedAt           int64
-	Doc                 map[string]any
+	// Tenant-facing identity: login host used in reset links, and the sender
+	// those reset emails come from.
+	WebmailURL      string
+	ResetFrom       string
+	IsActive        bool
+	RetentionMonths float64
+	MaxMessages     int
+	MaxBytes        int64
+	MessageCount    int
+	UsedBytes       int64
+	CreatedAt       int64
+	Doc             map[string]any
 }
 
 func findMailboxByAddress(p *Poche, addr string) (*mailboxRecord, error) {
@@ -119,6 +123,8 @@ func parseMailbox(id string, raw json.RawMessage) *mailboxRecord {
 		RecoveryEmail:       stringField(doc, "recovery_email"),
 		ResendAPIKey:        stringField(doc, "resend_api_key"),
 		ResendWebhookSecret: stringField(doc, "resend_webhook_secret"),
+		WebmailURL:          stringField(doc, "webmail_url"),
+		ResetFrom:           stringField(doc, "reset_from"),
 		IsActive:            boolField(doc, "is_active"),
 		RetentionMonths:     numField(doc, "retention_months"),
 		MaxMessages:         int(numField(doc, "max_messages")),
@@ -167,6 +173,8 @@ func mailboxCreateCmd() {
 	aliasCSV := fs.String("alias", "", "comma-separated alias addresses")
 	resendKey := fs.String("resend-key", "", "per-mailbox Resend API key ('-' = read stdin, 'env:NAME' = read env)")
 	resendSecret := fs.String("resend-webhook-secret", "", "per-mailbox Resend webhook signing secret ('-' / 'env:NAME')")
+	webmailURL := fs.String("webmail-url", "", "login URL for this tenant, used in password-reset links")
+	resetFrom := fs.String("reset-from", "", "sender for reset emails (defaults to the mailbox address when it has its own Resend key)")
 	_ = fs.Parse(os.Args[3:])
 	if *addr == "" || *password == "" {
 		fail(80, "input", "--address and --password required", "mailbox create --address x@y.fr --password secret --max-bytes 524288000")
@@ -211,6 +219,8 @@ func mailboxCreateCmd() {
 		"recovery_email":        *recoveryEmail,
 		"resend_api_key":        key,
 		"resend_webhook_secret": secret,
+		"webmail_url":           *webmailURL,
+		"reset_from":            *resetFrom,
 		"is_active":             true,
 		"retention_months":      *retention,
 		"max_messages":          *maxMessages,
@@ -314,6 +324,8 @@ func mailboxUpdateCmd() {
 	recoveryEmail := fs.String("recovery-email", "", "set recovery email (empty = unchanged)")
 	resendKey := fs.String("resend-key", "", "set per-mailbox Resend API key ('-' = stdin, 'env:NAME' = env, 'none' = clear)")
 	resendSecret := fs.String("resend-webhook-secret", "", "set per-mailbox webhook secret ('-' / 'env:NAME' / 'none')")
+	webmailURL := fs.String("webmail-url", "", "set login URL used in reset links ('none' = clear)")
+	resetFrom := fs.String("reset-from", "", "set sender for reset emails ('none' = clear)")
 	_ = fs.Parse(os.Args[3:])
 	if *addr == "" {
 		fail(80, "input", "--address required", "")
@@ -359,6 +371,15 @@ func mailboxUpdateCmd() {
 	}
 	if *recoveryEmail != "" {
 		doc["recovery_email"] = *recoveryEmail
+	}
+	for _, f := range []struct {
+		val, field string
+	}{{*webmailURL, "webmail_url"}, {*resetFrom, "reset_from"}} {
+		if f.val == "none" {
+			doc[f.field] = ""
+		} else if f.val != "" {
+			doc[f.field] = f.val
+		}
 	}
 	if *resendKey == "none" {
 		doc["resend_api_key"] = ""

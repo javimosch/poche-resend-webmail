@@ -6,8 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +25,11 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"ok": false, "error": "read body"})
 		return
 	}
+	// Log every delivery attempt: without this there is no way to tell a
+	// provider that never called from one whose calls we rejected.
+	fmt.Fprintf(os.Stderr, "{\"event\":\"webhook_hit\",\"bytes\":%d,\"signed\":%v,\"ua\":%q,\"from_ip\":%q}\n",
+		len(body), firstHeader(r, "svix-signature", "resend-signature", "webhook-signature") != "",
+		r.Header.Get("User-Agent"), r.Header.Get("X-Forwarded-For"))
 	// The payload has to be parsed before the signature can be checked, because
 	// the recipient decides which tenant's signing secret applies. Nothing is
 	// written to the store until the signature has been verified below.
@@ -69,12 +76,16 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	// Verify against the tenant's own secret when it has one, else the env secret.
 	if secret := webhookSecretForMailbox(mb); secret != "" {
 		if !verifyResendWebhook(secret, r, body) {
+			fmt.Fprintf(os.Stderr, "{\"event\":\"webhook_rejected\",\"reason\":\"bad_signature\",\"to\":%q}\n", toAddr)
 			writeJSON(w, 401, map[string]any{"ok": false, "error": "invalid signature"})
 			return
 		}
+	} else {
+		fmt.Fprintf(os.Stderr, "{\"event\":\"webhook_unverified\",\"to\":%q}\n", toAddr)
 	}
 
 	if mb == nil {
+		fmt.Fprintf(os.Stderr, "{\"event\":\"webhook_dropped\",\"reason\":\"no_mailbox\",\"to\":%q}\n", toAddr)
 		writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"email_id": emailID, "created": false, "dropped": "no matching mailbox"}})
 		return
 	}
@@ -99,6 +110,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	fmt.Fprintf(os.Stderr, "{\"event\":\"webhook_ingested\",\"to\":%q,\"created\":%v,\"email_id\":%q}\n", toAddr, created, emailID)
 	writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"email_id": emailID, "created": created}})
 }
 
