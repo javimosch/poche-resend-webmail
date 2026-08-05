@@ -116,7 +116,7 @@ func ensureSchema(p *Poche) error {
 		return fmt.Errorf("mailboxes: %w", err)
 	}
 	if err := p.AdminSchema("messages",
-		"mailbox_id:string!required!ref=mailboxes,from_addr:string!required,to_addr:string!required,cc_addr:string,subject:string!required,preview:string,body_text:string,body_html:string,search_text:string,thread_id:string,unread:bool,starred:bool,resend_id:string,message_id:string,received_for:string,direction:string,in_reply_to:string,references:string,created_at:int!now"); err != nil {
+		"mailbox_id:string!required!ref=mailboxes,from_addr:string!required,to_addr:string!required,cc_addr:string,subject:string!required,preview:string,body_text:string,body_html:string,html_sanitized:bool,search_text:string,thread_id:string,unread:bool,starred:bool,resend_id:string,message_id:string,received_for:string,direction:string,in_reply_to:string,references:string,created_at:int!now"); err != nil {
 		return fmt.Errorf("messages: %w", err)
 	}
 	if err := p.AdminSchema("tags", "name:string!required!unique"); err != nil {

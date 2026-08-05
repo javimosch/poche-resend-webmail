@@ -94,32 +94,55 @@ func handleSanitizeCmd() {
 	if err := json.Unmarshal(data, &page); err != nil {
 		fail(110, "internal", "decode: "+err.Error(), "")
 	}
-	scanned, changed, failed := 0, 0, 0
+	scanned, changed, failed, already := 0, 0, 0, 0
 	for _, it := range page.Items {
 		scanned++
+		// A doc is marked once it has been through the policy. Without this the
+		// pass is not idempotent: a body that already carried literal backslash
+		// escapes re-encodes on every store/read round-trip, so it would never
+		// reach a fixed point and would grow on each run.
+		if b, ok := it.Doc["html_sanitized"].(bool); ok && b {
+			already++
+			continue
+		}
 		raw := strField(it.Doc, "body_html")
 		if raw == "" {
+			// Nothing to clean, but mark it so later passes can skip it.
+			if *apply {
+				doc := it.Doc
+				doc["html_sanitized"] = true
+				_, _ = p.Update("messages", it.ID, doc)
+			}
 			continue
 		}
 		clean := sanitizeEmailHTML(raw)
 		if clean == raw {
+			if *apply {
+				doc := it.Doc
+				doc["html_sanitized"] = true
+				_, _ = p.Update("messages", it.ID, doc)
+			}
 			continue
 		}
 		changed++
+		fmt.Fprintf(os.Stderr, "{\"event\":\"sanitize_change\",\"id\":%q,\"was\":%d,\"now\":%d}\n",
+			it.ID, len(raw), len(clean))
 		if !*apply {
 			continue
 		}
 		doc := it.Doc
 		doc["body_html"] = clean
+		doc["html_sanitized"] = true
 		if _, err := p.Update("messages", it.ID, doc); err != nil {
 			failed++
 			fmt.Fprintf(os.Stderr, "{\"event\":\"sanitize_err\",\"id\":%q,\"err\":%q}\n", it.ID, err.Error())
 		}
 	}
 	outOK(map[string]any{
-		"scanned": scanned,
-		"changed": changed,
-		"failed":  failed,
-		"applied": *apply,
+		"scanned":           scanned,
+		"changed":           changed,
+		"already_sanitized": already,
+		"failed":            failed,
+		"applied":           *apply,
 	})
 }
