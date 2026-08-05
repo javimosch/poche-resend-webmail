@@ -114,7 +114,7 @@ func startServer(port int) {
 	mux.Handle("/", http.FileServer(http.FS(uiSub)))
 
 	fmt.Fprintf(os.Stderr, "{\"event\":\"serve\",\"url\":\"http://127.0.0.1:%d\",\"poche\":%q,\"token_hint\":%q}\n",
-		port, poche.Base, token[:8]+"…")
+		port, poche.Base, maskSecret(token))
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), withCORS(mux)); err != nil {
 		fail(110, "internal", "server error: "+err.Error(), "")
 	}

@@ -322,7 +322,11 @@ func mailboxUpdateCmd() {
 	if p.Token == "" {
 		fail(80, "input", "set POCHE_TOKEN", "")
 	}
-	_ = ensureAliasesSchema(p)
+	// Ensure the schema carries every field we may write — an older store that
+	// predates a field will otherwise drop it silently on update.
+	if err := ensureMailboxSchema(p); err != nil {
+		fail(100, "integration", "schema: "+err.Error(), "")
+	}
 	mb, err := findMailboxByAddress(p, *addr)
 	if err != nil || mb == nil {
 		// try alias lookup
