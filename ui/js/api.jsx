@@ -165,6 +165,7 @@ function tagNamesFromPage(data) {
 
 function viewLabel(view, tagView) {
   if (view === "archive") return "Archive";
+  if (view === "sent") return "Sent";
   if (view === "tag") return "#" + tagView;
   return "Inbox";
 }
@@ -174,9 +175,16 @@ function appendViewLinks(params, view, tagView) {
     params.append("has_link", LINK_ARCHIVE);
   } else if (view === "tag" && tagView) {
     params.append("has_link", "message_tags.message_id:tag=" + tagView);
-  } else {
+  } else if (view !== "sent") {
     params.append("missing_link", LINK_ARCHIVE);
   }
+}
+
+// Inbox shows received mail only; Sent shows what this mailbox sent out.
+function viewWhere(view) {
+  if (view === "sent") return "direction=out";
+  if (view === "inbox") return "direction=in";
+  return "";
 }
 
 function buildListPath(view, tagView, q, limit, offset) {
@@ -186,16 +194,30 @@ function buildListPath(view, tagView, q, limit, offset) {
   params.set("sort", "created_at");
   params.set("order", "desc");
   const needle = (q || "").trim().replace(/,/g, " ");
-  if (needle) params.set("where", "search_text~=" + needle);
+  const where = [viewWhere(view), needle ? "search_text~=" + needle : ""].filter(Boolean);
+  if (where.length) params.set("where", where.join(","));
   appendViewLinks(params, view, tagView);
   return "/api/messages?" + params.toString();
 }
 
 function buildUnreadCountPath(view, tagView) {
   const params = new URLSearchParams();
-  params.set("where", "unread=true");
+  params.set("where", ["unread=true", viewWhere(view)].filter(Boolean).join(","));
   appendViewLinks(params, view, tagView);
   return "/api/messages/count?" + params.toString();
+}
+
+function composeMail(token, body) {
+  return apiFetch(token, "/api/compose", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+function fetchSendAddresses(token) {
+  return apiFetch(token, "/api/mailbox/addresses")
+    .then((d) => d.addresses || [])
+    .catch(() => []);
 }
 
 function createTag(token, name) {

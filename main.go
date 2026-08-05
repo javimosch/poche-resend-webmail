@@ -29,6 +29,8 @@ func main() {
 		handleSeedMailboxCmd()
 	case "reply":
 		handleReplyCmd()
+	case "send", "compose":
+		handleComposeCmd()
 	case "list":
 		handleListCmd()
 	case "read":
@@ -140,6 +142,7 @@ Usage:
   poche-resend-webmail list    [-limit 20]
   poche-resend-webmail read    <id>
   poche-resend-webmail reply   <id> <text> [from]
+  poche-resend-webmail send    --to a@b.fr --subject S --text T [--from x] [--cc] [--bcc]
   poche-resend-webmail guide | stop | status | version | help
 
 Env:
@@ -147,7 +150,8 @@ Env:
   ADMIN_TOKEN              Bearer for admin API (mailbox management; separate from WEBMAIL_TOKEN)
   POCHE_URL                default http://127.0.0.1:17781
   POCHE_TOKEN              poche admin/user token
-  RESEND_API_KEY           required for sync/reply/webhook fetch
+  RESEND_API_KEY           required for sync/reply/send/webhook fetch
+  RESEND_BASE_URL          override Resend API host (default https://api.resend.com)
   RESEND_WEBHOOK_SECRET    verify webhooks (empty = accept, dev only)
   MAIL_FROM_ALLOWLIST      comma suffixes, default @intrane.fr
   MAILBOX_RETENTION_MONTHS default 3 (fallback if mailbox field missing)

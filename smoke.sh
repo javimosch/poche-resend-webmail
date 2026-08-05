@@ -34,7 +34,7 @@ UI_PID=$!
 sleep 0.4
 
 curl -sf http://127.0.0.1:3091/api/health | grep -q '"ok":true'
-curl -sf http://127.0.0.1:3091/api/config | grep -q 'WEBMAIL_TOKEN'
+curl -sf http://127.0.0.1:3091/api/config | grep -q '"auth"'
 # no token → 401
 code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3091/api/status)
 test "$code" = "401"
@@ -48,5 +48,20 @@ curl -sf -X POST http://127.0.0.1:3091/webhooks/resend \
   -d '{"type":"email.received","data":{"email_id":"nonexistent-smoke"}}' | grep -q '"ok"'
 curl -sf "http://127.0.0.1:3091/?token=$WEBMAIL_TOKEN" | grep -q 'poche resend webmail'
 ./poche-resend-webmail guide | grep -q 'poche-resend-webmail'
+
+# compose: auth required, and validation rejects an empty recipient
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3091/api/compose -d '{}')
+test "$code" = "401"
+curl -s -X POST -H "Authorization: Bearer $WEBMAIL_TOKEN" \
+  http://127.0.0.1:3091/api/compose -d '{"subject":"x","text":"y"}' | grep -q 'recipient'
+# sendable addresses endpoint answers for admin
+curl -sf -H "Authorization: Bearer $WEBMAIL_TOKEN" http://127.0.0.1:3091/api/mailbox/addresses | grep -q 'addresses'
+# per-mailbox credentials never surface in mailbox list
+./poche-resend-webmail mailbox create --address smoke@intrane.fr --password pw \
+  --recovery-email r@intrane.fr >/dev/null
+SMOKE_KEY=re_smoke_secret_value ./poche-resend-webmail mailbox update \
+  --address smoke@intrane.fr --resend-key env:SMOKE_KEY | grep -q '"has_resend_key":true'
+./poche-resend-webmail mailbox list | grep -q 're_smoke_secret_value' && { echo "FAIL: key leaked"; exit 1; }
+./poche-resend-webmail mailbox list | grep -q '"has_resend_key":true'
 
 echo "OK poche-resend-webmail smoke"

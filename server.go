@@ -79,6 +79,8 @@ func startServer(port int) {
 	mux.HandleFunc("/api/tags", authed(handleTagsAPI))
 	mux.HandleFunc("/api/message-tags", authed(handleMessageTagsAPI))
 	mux.HandleFunc("/api/reply", authed(handleReplyAPI))
+	mux.HandleFunc("/api/compose", authed(handleComposeAPI))
+	mux.HandleFunc("/api/mailbox/addresses", authed(handleMailboxAddressesAPI))
 	mux.HandleFunc("/api/cleanup", authed(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeJSON(w, 405, map[string]any{"ok": false, "error": "POST only"})
@@ -151,9 +153,12 @@ func handleGuide() {
 		"star":        "PUT /api/messages/:id/star · toggle",
 		"bulk":        "POST /api/bulk · mark_read|mark_unread|archive|unarchive|delete|star|unstar|tag|untag",
 		"mailbox":     "CLI: mailbox create|list|update|delete|alias|reset-password — per-address auth + storage caps + aliases",
+		"tenancy":     "per-mailbox Resend key/webhook secret (--resend-key '-'|env:NAME); empty ⇒ env RESEND_API_KEY",
 		"login":       "POST /api/login {address, password} → {token, address, max_bytes} (address can be primary or alias)",
 		"forgot":      "POST /api/forgot-password {address} → sends reset link to recovery_email",
 		"reset":       "POST /api/reset-password {token, new_password} → sets new password, invalidates sessions",
-		"cli":         []string{"serve", "seed", "sync", "cleanup", "mailbox", "list", "read", "reply", "guide"},
+		"compose":     "POST /api/compose {from?, to, cc?, bcc?, subject, text} · new outbound mail, stored as direction=out",
+		"addresses":   "GET /api/mailbox/addresses · addresses the caller may send as (primary + aliases)",
+		"cli":         []string{"serve", "seed", "sync", "cleanup", "mailbox", "list", "read", "reply", "send", "guide"},
 	})
 }

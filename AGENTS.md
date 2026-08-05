@@ -150,6 +150,65 @@ Generates `count` emails of ~`size-kb` KB each, routed to the specified mailbox.
 Emails to addresses with no matching mailbox are dropped (not stored).
 Quota is checked at ingest time — if `used + new_message_size > max_bytes`, the email is dropped.
 
+## Compose (v0.3.1+)
+
+Send a brand-new email (not a reply). The sender must be an address that
+belongs to the caller's mailbox (primary or alias) **and** pass
+`MAIL_FROM_ALLOWLIST`.
+
+```bash
+POST /api/compose
+  {"from":"contact@x.fr","to":"a@b.fr, c@d.fr","cc":"e@f.fr","bcc":"g@h.fr",
+   "subject":"Devis","text":"Bonjour…"}
+  → {"sent_id":"…","from":"…","to":[…],"stored":true}
+
+GET /api/mailbox/addresses
+  → {"addresses":["contact@x.fr","florence@x.fr"],"primary":"contact@x.fr"}
+
+# CLI (admin: From decides which mailbox stores the sent copy)
+./poche-resend-webmail send --from contact@x.fr --to a@b.fr \
+  --subject "Devis" --text "Bonjour…" [--cc …] [--bcc …]
+```
+
+- `to` / `cc` / `bcc` accept a JSON array or a comma/semicolon-separated string.
+- The sent copy is stored with `direction=out` (bcc is **not** stored).
+- Inbox now filters `direction=in`; the new **Sent** view filters `direction=out`.
+- UI: "Compose" button in the sidebar → modal with From selector (primary + aliases).
+- Plain text only — no attachments, no HTML compose yet.
+
+`RESEND_BASE_URL` overrides the Resend API host (default
+`https://api.resend.com`) so sends can be pointed at a stub in tests.
+
+## Per-mailbox Resend credentials (v0.3.1+)
+
+Each tenant can own a **separate Resend account** (its own verified domain,
+API key and webhook secret) while sharing one deployment. A mailbox with a key
+uses it; a mailbox without one falls back to the process-wide
+`RESEND_API_KEY` / `RESEND_WEBHOOK_SECRET`.
+
+```bash
+# never put a key in argv — '-' reads stdin, 'env:NAME' reads the environment
+printf 're_xxx' | ./poche-resend-webmail mailbox update --address contact@x.fr --resend-key -
+RK=whsec_xxx ./poche-resend-webmail mailbox update --address contact@x.fr --resend-webhook-secret env:RK
+./poche-resend-webmail mailbox update --address contact@x.fr --resend-key none   # clear
+```
+
+`mailbox list` reports `has_resend_key` / `has_webhook_secret` and a masked
+`resend_key` — it never prints the credential.
+
+Which key is used where:
+
+| Path | Key |
+|---|---|
+| `POST /api/compose`, `POST /api/reply` | the sending mailbox's key |
+| `POST /webhooks/resend` — signature verify | the recipient mailbox's secret |
+| `POST /webhooks/resend` — fetch full email | the recipient mailbox's key |
+| `sync` | polls **every** distinct key (env + each mailbox) |
+
+The webhook resolves the recipient before verifying, because the recipient
+decides whose signing secret applies. Nothing is written to the store until
+the signature passes.
+
 ### Admin access
 
 Set `ADMIN_TOKEN` env to a separate token for admin API access (no mailbox scoping).

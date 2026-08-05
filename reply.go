@@ -107,7 +107,7 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride string) 
 			"References":  mid,
 		}
 	}
-	re := newResendFromEnv()
+	re := resendForMailbox(mb)
 	sent, err := re.sendEmail(payload)
 	if err != nil {
 		return nil, err

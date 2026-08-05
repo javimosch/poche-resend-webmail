@@ -1,4 +1,4 @@
-function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onLogout, token, account }) {
+function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onLogout, token, account, onComposeClick }) {
   const [newTag, setNewTag] = React.useState("");
   const [tagBusy, setTagBusy] = React.useState(false);
   const navBtn = (active, hasUnread) =>
@@ -30,10 +30,22 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
       </div>
       <nav className="p-2 flex-1 overflow-y-auto scrollbar-thin">
         <button
+          onClick={onComposeClick}
+          className="w-full mb-2 px-3 py-2 rounded-md text-sm bg-accent-soft text-accent border border-accent/40 hover:bg-accent/20"
+        >
+          Compose
+        </button>
+        <button
           className={navBtn(view === "inbox", (unread.inbox || 0) > 0)}
           onClick={() => setView("inbox", "")}
         >
           {label("Inbox", unread.inbox || 0)}
+        </button>
+        <button
+          className={navBtn(view === "sent", false)}
+          onClick={() => setView("sent", "")}
+        >
+          Sent
         </button>
         <button
           className={navBtn(view === "archive", (unread.archive || 0) > 0)}
@@ -256,7 +268,7 @@ function MessageList({
             <button className="flex-1 min-w-0 text-left" onClick={() => onSelect(m.id)}>
               <div className="flex items-baseline justify-between gap-2">
                 <span className={"text-sm truncate " + (m.unread ? "font-semibold text-ink" : "text-ink-muted")}>
-                  {m.from_addr}
+                  {m.direction === "out" ? "To " + (m.to_addr || "") : m.from_addr}
                 </span>
                 <span className="text-[11px] font-mono text-ink-dim shrink-0 tabular-nums">
                   {formatWhen(m.created_at)}

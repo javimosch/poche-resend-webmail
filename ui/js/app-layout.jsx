@@ -37,6 +37,10 @@ function AppLayout({
   pageSize,
   account,
   onLogout,
+  composeOpen,
+  setComposeOpen,
+  sendAddresses,
+  onCompose,
 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.floor(offset / pageSize) + 1;
@@ -55,6 +59,7 @@ function AppLayout({
         onLogout={onLogout}
         token={token}
         account={account}
+        onComposeClick={() => setComposeOpen(true)}
       />
       <section className="w-[400px] shrink-0 border-r border-paper-line flex flex-col bg-paper/40">
         <div className="px-4 py-3 border-b border-paper-line flex items-center justify-between">
@@ -122,6 +127,14 @@ function AppLayout({
           account={account}
         />
       </main>
+      <ComposeModal
+        open={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        onSend={onCompose}
+        addresses={sendAddresses}
+        defaultFrom={account?.address || (sendAddresses || [])[0] || ""}
+        busy={busy}
+      />
     </div>
   );
 }
