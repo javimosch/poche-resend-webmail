@@ -27,8 +27,8 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	// Log every delivery attempt: without this there is no way to tell a
 	// provider that never called from one whose calls we rejected.
-	fmt.Fprintf(os.Stderr, "{\"event\":\"webhook_hit\",\"bytes\":%d,\"signed\":%v,\"ua\":%q,\"from_ip\":%q}\n",
-		len(body), firstHeader(r, "svix-signature", "resend-signature", "webhook-signature") != "",
+	fmt.Fprintf(os.Stderr, "{\"event\":\"webhook_hit\",\"host\":%q,\"bytes\":%d,\"signed\":%v,\"ua\":%q,\"from_ip\":%q}\n",
+		r.Host, len(body), firstHeader(r, "svix-signature", "resend-signature", "webhook-signature") != "",
 		r.Header.Get("User-Agent"), r.Header.Get("X-Forwarded-For"))
 	// The payload has to be parsed before the signature can be checked, because
 	// the recipient decides which tenant's signing secret applies. Nothing is
