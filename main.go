@@ -33,6 +33,8 @@ func main() {
 		handleComposeCmd()
 	case "sanitize":
 		handleSanitizeCmd()
+	case "secret-key":
+		handleSecretKeyCmd()
 	case "list":
 		handleListCmd()
 	case "read":
@@ -138,7 +140,8 @@ Usage:
   poche-resend-webmail seed    [-count 100]
   poche-resend-webmail sync
   poche-resend-webmail cleanup
-  poche-resend-webmail mailbox create|list|update|delete|alias|reset-password
+  poche-resend-webmail mailbox create|list|update|delete|alias|reset-password|encrypt-secrets
+  poche-resend-webmail secret-key                   (generate CREDENTIALS_KEY)
   poche-resend-webmail smtp    [-port 25]          (minimal SMTP receiver for inbound)
   poche-resend-webmail seed-mailbox --address X [--count 10 --size-kb 200]
   poche-resend-webmail list    [-limit 20]
@@ -154,6 +157,7 @@ Env:
   POCHE_TOKEN              poche admin/user token
   RESEND_API_KEY           required for sync/reply/send/webhook fetch
   RESEND_BASE_URL          override Resend API host (default https://api.resend.com)
+  CREDENTIALS_KEY          32-byte hex/base64 key encrypting tenant Resend credentials at rest
   RESEND_WEBHOOK_SECRET    verify webhooks (empty = accept, dev only)
   MAIL_FROM_ALLOWLIST      comma suffixes, default @intrane.fr
   MAILBOX_RETENTION_MONTHS default 3 (fallback if mailbox field missing)

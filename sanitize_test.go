@@ -74,3 +74,52 @@ func lower(s string) string {
 	}
 	return string(b)
 }
+
+func TestCredentialEncryptionRoundTrip(t *testing.T) {
+	t.Setenv("CREDENTIALS_KEY", "6f1c4a2b8d3e5f70918273645566778899aabbccddeeff00112233445566778899"[:64])
+	// Shaped like a Resend key, but not one — never put a live credential in a test.
+	plain := "re_TestOnly_0000000000000000000000"
+	sealed, err := encryptSecret(plain)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	if !isEncrypted(sealed) {
+		t.Fatalf("not marked encrypted: %q", sealed)
+	}
+	if containsFold(sealed, "re_TestOnly") || containsFold(sealed, plain) {
+		t.Fatalf("plaintext leaked into ciphertext: %q", sealed)
+	}
+	got, err := decryptSecret(sealed)
+	if err != nil || got != plain {
+		t.Fatalf("round trip failed: %q %v", got, err)
+	}
+	// same plaintext must not produce the same ciphertext (random nonce)
+	again, _ := encryptSecret(plain)
+	if again == sealed {
+		t.Errorf("ciphertext is deterministic — nonce not random")
+	}
+}
+
+func TestDecryptWithWrongKeyFails(t *testing.T) {
+	t.Setenv("CREDENTIALS_KEY", "6f1c4a2b8d3e5f70918273645566778899aabbccddeeff001122334455667788")
+	sealed, err := encryptSecret("whsec_topsecret")
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	t.Setenv("CREDENTIALS_KEY", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+	if got, err := decryptSecret(sealed); err == nil {
+		t.Errorf("wrong key decrypted anyway: %q", got)
+	}
+	t.Setenv("CREDENTIALS_KEY", "")
+	if _, err := decryptSecret(sealed); err == nil {
+		t.Errorf("missing key should be an error, not a silent pass-through")
+	}
+}
+
+func TestPlaintextValuesStillReadable(t *testing.T) {
+	t.Setenv("CREDENTIALS_KEY", "6f1c4a2b8d3e5f70918273645566778899aabbccddeeff001122334455667788")
+	got, err := decryptSecret("re_legacy_plaintext")
+	if err != nil || got != "re_legacy_plaintext" {
+		t.Errorf("legacy plaintext broke: %q %v", got, err)
+	}
+}

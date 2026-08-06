@@ -209,6 +209,30 @@ The webhook resolves the recipient before verifying, because the recipient
 decides whose signing secret applies. Nothing is written to the store until
 the signature passes.
 
+## Credentials at rest (v0.3.2+)
+
+poche has **no encryption at rest** — it writes append-only WAL chunks in the
+clear, so any copy of the data directory (backup, snapshot, pre-deploy tarball)
+carries live tenant credentials. `resend_api_key` and `resend_webhook_secret`
+are therefore encrypted with AES-256-GCM before storage.
+
+```bash
+./poche-resend-webmail secret-key                      # generate CREDENTIALS_KEY
+# put it in the env file (mode 600), restart, then:
+./poche-resend-webmail mailbox encrypt-secrets --apply # migrate existing rows
+poche compact                                          # drop plaintext WAL history
+```
+
+- Stored form is `enc:v1:<base64(nonce||ciphertext)>`; values without the prefix
+  are read as plaintext, so adoption needs no flag day.
+- Without `CREDENTIALS_KEY` set, new credentials are stored **plaintext** and a
+  `credential_stored_plaintext` event is logged.
+- Reading an encrypted value without the key logs `credential_decrypt_err` and
+  yields empty rather than silently falling back to the env credential.
+- **Encrypting is not enough on its own:** the plaintext survives in older WAL
+  chunks until `poche compact` rewrites them. Compact with the services stopped.
+- Losing the key makes stored credentials unrecoverable — they must be re-entered.
+
 ### Admin access
 
 Set `ADMIN_TOKEN` env to a separate token for admin API access (no mailbox scoping).

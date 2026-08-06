@@ -121,8 +121,8 @@ func parseMailbox(id string, raw json.RawMessage) *mailboxRecord {
 		Name:                stringField(doc, "name"),
 		PasswordHash:        stringField(doc, "password_hash"),
 		RecoveryEmail:       stringField(doc, "recovery_email"),
-		ResendAPIKey:        stringField(doc, "resend_api_key"),
-		ResendWebhookSecret: stringField(doc, "resend_webhook_secret"),
+		ResendAPIKey:        decryptOrWarn(stringField(doc, "resend_api_key"), "resend_api_key", stringField(doc, "address")),
+		ResendWebhookSecret: decryptOrWarn(stringField(doc, "resend_webhook_secret"), "resend_webhook_secret", stringField(doc, "address")),
 		WebmailURL:          stringField(doc, "webmail_url"),
 		ResetFrom:           stringField(doc, "reset_from"),
 		IsActive:            boolField(doc, "is_active"),
@@ -140,7 +140,7 @@ func parseMailbox(id string, raw json.RawMessage) *mailboxRecord {
 
 func handleMailboxCmd() {
 	if len(os.Args) < 3 {
-		fail(80, "input", "usage: mailbox create|list|update|delete|alias|reset-password", "")
+		fail(80, "input", "usage: mailbox create|list|update|delete|alias|reset-password|encrypt-secrets", "")
 	}
 	sub := os.Args[2]
 	switch sub {
@@ -156,8 +156,10 @@ func handleMailboxCmd() {
 		handleAliasCmd()
 	case "reset-password":
 		handleResetPasswordCmd()
+	case "encrypt-secrets":
+		handleEncryptSecretsCmd()
 	default:
-		fail(80, "input", "unknown mailbox subcommand: "+sub, "mailbox create|list|update|delete|alias|reset-password")
+		fail(80, "input", "unknown mailbox subcommand: "+sub, "mailbox create|list|update|delete|alias|reset-password|encrypt-secrets")
 	}
 }
 
@@ -216,13 +218,21 @@ func mailboxCreateCmd() {
 	if err != nil {
 		fail(80, "input", "--resend-webhook-secret: "+err.Error(), "")
 	}
+	sealedKey, err := encryptSecret(key)
+	if err != nil {
+		fail(80, "input", "--resend-key: "+err.Error(), "")
+	}
+	sealedSecret, err := encryptSecret(secret)
+	if err != nil {
+		fail(80, "input", "--resend-webhook-secret: "+err.Error(), "")
+	}
 	doc := map[string]any{
 		"name":                  *name,
 		"address":               *addr,
 		"password_hash":         string(hash),
 		"recovery_email":        *recoveryEmail,
-		"resend_api_key":        key,
-		"resend_webhook_secret": secret,
+		"resend_api_key":        sealedKey,
+		"resend_webhook_secret": sealedSecret,
 		"webmail_url":           *webmailURL,
 		"reset_from":            *resetFrom,
 		"is_active":             true,
@@ -396,7 +406,11 @@ func mailboxUpdateCmd() {
 		if err != nil {
 			fail(80, "input", "--resend-key: "+err.Error(), "")
 		}
-		doc["resend_api_key"] = key
+		sealed, err := encryptSecret(key)
+		if err != nil {
+			fail(80, "input", "--resend-key: "+err.Error(), "")
+		}
+		doc["resend_api_key"] = sealed
 	}
 	if *resendSecret == "none" {
 		doc["resend_webhook_secret"] = ""
@@ -405,7 +419,11 @@ func mailboxUpdateCmd() {
 		if err != nil {
 			fail(80, "input", "--resend-webhook-secret: "+err.Error(), "")
 		}
-		doc["resend_webhook_secret"] = secret
+		sealed, err := encryptSecret(secret)
+		if err != nil {
+			fail(80, "input", "--resend-webhook-secret: "+err.Error(), "")
+		}
+		doc["resend_webhook_secret"] = sealed
 	}
 	if _, err := p.Update("mailboxes", mb.ID, doc); err != nil {
 		fail(100, "integration", "update: "+err.Error(), "")
