@@ -12,6 +12,7 @@ function MessagePane({
   archived,
   busy,
   account,
+  onBack,
 }) {
   const { t, lang } = useI18n();
   const [reply, setReply] = React.useState("");
@@ -37,6 +38,14 @@ function MessagePane({
   return (
     <div className="h-full flex flex-col">
       <header className="px-6 py-5 border-b border-paper-line">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="md:hidden mb-2 text-[0.76rem] text-ink-dim hover:text-accent"
+          >
+            ← {t("inbox")}
+          </button>
+        )}
         <h1 className="font-display text-2xl text-balance text-ink">{msg.subject}</h1>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-muted">
           <span>

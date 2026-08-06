@@ -189,6 +189,25 @@ GET /api/mailbox/addresses
 `RESEND_BASE_URL` overrides the Resend API host (default
 `https://api.resend.com`) so sends can be pointed at a stub in tests.
 
+## Branding and layout (v0.3.5+)
+
+The sidebar name is per **mailbox** (`brand`), falling back to `BRAND_NAME`
+then `poche` — one deployment serves several clients, so it cannot be a single
+global string. It rides on the login response into the stored account.
+
+```bash
+./poche-resend-webmail mailbox update --address contact@x.fr --brand "Enbauges"
+```
+
+Layout is responsive below `md` (768px): the sidebar becomes an overlay
+drawer behind a ☰ button, and the list and the message take turns on the full
+width with a back link. Mail bodies are forced to wrap (`pre-wrap`, capped
+image/table widths) because senders write for arbitrary widths and a fixed
+`<pre>` scrolls the whole page sideways on a phone.
+
+The store-health line was removed from the sidebar; it only appears now when
+poche is actually down.
+
 ## i18n (v0.3.4+)
 
 UI strings live in `ui/js/i18n.jsx` as `{en, fr}` dictionaries; values may be

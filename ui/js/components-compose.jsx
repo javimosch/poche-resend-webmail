@@ -57,14 +57,14 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 py-10"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-0 py-0 md:px-4 md:py-10"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <form
         onSubmit={submit}
-        className="w-full max-w-2xl bg-paper-raised border border-paper-line rounded-lg shadow-2xl flex flex-col max-h-full"
+        className="w-full h-full md:h-auto md:max-w-2xl bg-paper-raised border border-paper-line md:rounded-lg shadow-2xl flex flex-col max-h-full"
       >
         <header className="px-5 py-3 border-b border-paper-line flex items-center justify-between">
           <span className="font-display text-lg text-ink">{t("new_message")}</span>
@@ -178,10 +178,10 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
               rows={14}
               placeholder={
                 format === "markdown"
-                  ? "# Bonjour\n\nWrite **Markdown** — it is converted to HTML when sent."
+                  ? t("md_placeholder")
                   : format === "html"
-                    ? "<p>Write HTML — it is sanitized before sending.</p>"
-                    : "Write your message…"
+                    ? t("html_placeholder")
+                    : t("body_placeholder")
               }
               className={field + " resize-y font-mono text-[0.9rem]"}
             />

@@ -143,6 +143,7 @@ func handleLoginAPI(w http.ResponseWriter, r *http.Request) {
 			"token":      token,
 			"address":    mb.Address,
 			"name":       mb.Name,
+			"brand":      brandFor(mb),
 			"max_bytes":  mb.MaxBytes,
 			"expires_in": "7d",
 		},

@@ -1,4 +1,4 @@
-function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onRenameTag, onDeleteTag, onLogout, token, account, onComposeClick }) {
+function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onRenameTag, onDeleteTag, onLogout, token, account, onComposeClick, brand, onCloseNav }) {
   const { t } = useI18n();
   const [newTag, setNewTag] = React.useState("");
   const [tagBusy, setTagBusy] = React.useState(false);
@@ -25,9 +25,18 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
 
   return (
     <aside className="w-52 shrink-0 border-r border-paper-line bg-paper-raised/60 flex flex-col">
-      <div className="px-4 py-5 border-b border-paper-line">
-        <div className="font-display text-xl tracking-tight text-ink">poche</div>
-        <div className="text-[0.76rem] uppercase tracking-[0.18em] text-ink-dim mt-1">resend webmail</div>
+      <div className="px-4 py-5 border-b border-paper-line flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-display text-xl tracking-tight text-ink truncate" title={brand}>
+            {brand}
+          </div>
+          <div className="text-[0.76rem] uppercase tracking-[0.18em] text-ink-dim mt-1">webmail</div>
+        </div>
+        {onCloseNav && (
+          <button onClick={onCloseNav} className="md:hidden text-ink-dim hover:text-accent px-2" aria-label="close">
+            ✕
+          </button>
+        )}
       </div>
       <nav className="p-2 flex-1 overflow-y-auto scrollbar-thin">
         <button
@@ -94,9 +103,9 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
           </div>
         )}
         <div>{t("in_view", total)}</div>
-        <div className={status?.poche_ok ? "text-accent" : "text-red-400"}>
-          {status?.poche_ok ? t("poche_ok") : t("poche_down")}
-        </div>
+        {status && status.poche_ok === false && (
+          <div className="text-red-400">{t("poche_down")}</div>
+        )}
         <StorageBar token={token} />
         <ThemeToggle />
         <LangToggle />

@@ -25,7 +25,7 @@ const mailboxSchemaExtra = "password_hash:string,is_active:bool,created_at:int"
 const sessionsSchema = "token:string!required!unique,mailbox_id:string!required!ref=mailboxes,expires_at:int"
 
 func ensureMailboxSchema(p *Poche) error {
-	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required!unique,retention_months:float,max_messages:int,max_bytes:int,message_count:int,used_bytes:int,password_hash:string,recovery_email:string,resend_api_key:string,resend_webhook_secret:string,webmail_url:string,reset_from:string,is_active:bool,created_at:int"); err != nil {
+	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required!unique,retention_months:float,max_messages:int,max_bytes:int,message_count:int,used_bytes:int,password_hash:string,recovery_email:string,resend_api_key:string,resend_webhook_secret:string,webmail_url:string,reset_from:string,brand:string,is_active:bool,created_at:int"); err != nil {
 		return fmt.Errorf("mailboxes: %w", err)
 	}
 	if err := p.AdminSchema("sessions", sessionsSchema); err != nil {
@@ -59,6 +59,7 @@ type mailboxRecord struct {
 	// those reset emails come from.
 	WebmailURL      string
 	ResetFrom       string
+	Brand           string
 	IsActive        bool
 	RetentionMonths float64
 	MaxMessages     int
@@ -125,6 +126,7 @@ func parseMailbox(id string, raw json.RawMessage) *mailboxRecord {
 		ResendWebhookSecret: decryptOrWarn(stringField(doc, "resend_webhook_secret"), "resend_webhook_secret", stringField(doc, "address")),
 		WebmailURL:          stringField(doc, "webmail_url"),
 		ResetFrom:           stringField(doc, "reset_from"),
+		Brand:               stringField(doc, "brand"),
 		IsActive:            boolField(doc, "is_active"),
 		RetentionMonths:     numField(doc, "retention_months"),
 		MaxMessages:         int(numField(doc, "max_messages")),
@@ -177,6 +179,7 @@ func mailboxCreateCmd() {
 	resendSecret := fs.String("resend-webhook-secret", "", "per-mailbox Resend webhook signing secret ('-' / 'env:NAME')")
 	webmailURL := fs.String("webmail-url", "", "login URL for this tenant, used in password-reset links")
 	resetFrom := fs.String("reset-from", "", "sender for reset emails (defaults to the mailbox address when it has its own Resend key)")
+	brand := fs.String("brand", "", "name shown in the sidebar for this tenant (defaults to BRAND_NAME)")
 	_ = fs.Parse(os.Args[3:])
 	if *addr == "" || *password == "" {
 		fail(80, "input", "--address and --password required", "mailbox create --address x@y.fr --password secret --max-bytes 524288000")
@@ -235,6 +238,7 @@ func mailboxCreateCmd() {
 		"resend_webhook_secret": sealedSecret,
 		"webmail_url":           *webmailURL,
 		"reset_from":            *resetFrom,
+		"brand":                 *brand,
 		"is_active":             true,
 		"retention_months":      *retention,
 		"max_messages":          *maxMessages,
@@ -340,6 +344,7 @@ func mailboxUpdateCmd() {
 	resendSecret := fs.String("resend-webhook-secret", "", "set per-mailbox webhook secret ('-' / 'env:NAME' / 'none')")
 	webmailURL := fs.String("webmail-url", "", "set login URL used in reset links ('none' = clear)")
 	resetFrom := fs.String("reset-from", "", "set sender for reset emails ('none' = clear)")
+	brand := fs.String("brand", "", "set the sidebar brand for this tenant ('none' = clear)")
 	_ = fs.Parse(os.Args[3:])
 	if *addr == "" {
 		fail(80, "input", "--address required", "")
@@ -392,7 +397,7 @@ func mailboxUpdateCmd() {
 	}
 	for _, f := range []struct {
 		val, field string
-	}{{*webmailURL, "webmail_url"}, {*resetFrom, "reset_from"}} {
+	}{{*webmailURL, "webmail_url"}, {*resetFrom, "reset_from"}, {*brand, "brand"}} {
 		if f.val == "none" {
 			doc[f.field] = ""
 		} else if f.val != "" {

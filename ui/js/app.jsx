@@ -348,6 +348,8 @@ function App() {
       setOffset={setOffset}
       pageSize={pageSize}
       account={account}
+      brand={account?.brand || cfg?.brand || "poche"}
+      onBack={() => setSelected(null)}
       onLogout={() => { clearAuth(); setPassword(""); }}
       composeOpen={composeOpen}
       setComposeOpen={setComposeOpen}

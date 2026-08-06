@@ -48,6 +48,7 @@ func startServer(port int) {
 				"auth":           authMode,
 				"resend_enabled": newResendFromEnv().enabled(),
 				"note":           "Login with address+password, or Bearer token.",
+				"brand":          envOr("BRAND_NAME", "poche"),
 			},
 		})
 	})

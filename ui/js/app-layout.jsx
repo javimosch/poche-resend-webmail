@@ -40,20 +40,52 @@ function AppLayout({
   account,
   onLogout,
   composeOpen,
+  brand,
+  onBack,
   setComposeOpen,
   sendAddresses,
   onCompose,
 }) {
   const { t } = useI18n();
+  // Below md the three panes do not fit side by side: the sidebar becomes a
+  // drawer, and the list and the message take turns on the full width.
+  const [navOpen, setNavOpen] = React.useState(false);
+  const showPane = !!msg;
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.floor(offset / pageSize) + 1;
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex flex-col md:flex-row">
+      <header className="md:hidden flex items-center gap-3 px-3 py-2 border-b border-paper-line bg-paper-raised/60 shrink-0">
+        <button
+          onClick={() => setNavOpen(true)}
+          className="text-ink-muted hover:text-accent px-1 text-lg leading-none"
+          aria-label={t("tags")}
+        >
+          ☰
+        </button>
+        <span className="text-sm text-ink truncate">{viewLabel(view, tagView, t)}</span>
+        <span className="ml-auto text-[0.7rem] text-ink-dim tabular-nums">{total}</span>
+      </header>
+
+      {navOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-30 bg-black/50"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+
+      <div
+        className={
+          "z-40 shrink-0 transition-transform md:transition-none " +
+          "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:w-64 " +
+          (navOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full")
+        }
+      >
       <Sidebar
         view={view}
         tagView={tagView}
-        setView={setView}
+        setView={(v, tag) => { setView(v, tag); setNavOpen(false); }}
         tags={tags}
         unread={unread}
         total={total}
@@ -64,9 +96,12 @@ function AppLayout({
         onLogout={onLogout}
         token={token}
         account={account}
-        onComposeClick={() => setComposeOpen(true)}
+        onComposeClick={() => { setComposeOpen(true); setNavOpen(false); }}
+        brand={brand}
+        onCloseNav={() => setNavOpen(false)}
       />
-      <section className="w-[400px] shrink-0 border-r border-paper-line flex flex-col bg-paper/40">
+      </div>
+      <section className={"w-full md:w-[400px] shrink-0 border-r border-paper-line flex-col bg-paper/40 min-h-0 " + (showPane ? "hidden md:flex" : "flex")}>
         <div className="px-4 py-3 border-b border-paper-line flex items-center justify-between">
           <span className="text-sm text-ink-muted">{viewLabel(view, tagView, t)}</span>
           <div className="flex gap-1 items-center">
@@ -115,7 +150,7 @@ function AppLayout({
           />
         </div>
       </section>
-      <main className="flex-1 min-w-0 bg-paper">
+      <main className={"flex-1 min-w-0 bg-paper " + (showPane ? "block" : "hidden md:block")}>
         <MessagePane
           msg={msg}
           msgTags={msgTags}
@@ -130,6 +165,7 @@ function AppLayout({
           onDelete={onDelete}
           onReply={onReply}
           account={account}
+          onBack={onBack}
         />
       </main>
       <ComposeModal

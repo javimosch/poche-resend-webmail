@@ -28,7 +28,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
       .then((data) => {
         setToken(data.token);
         if (data.address) {
-          setAccount({ address: data.address, name: data.name || "" });
+          setAccount({ address: data.address, name: data.name || "", brand: data.brand || "" });
         }
         if (remember) {
           setRememberedCreds({ address: address.trim(), password: password.trim() });
@@ -129,9 +129,9 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
   if (loginMode === "token") {
     return (
       <div className="max-w-lg mx-auto mt-24 p-8 border border-paper-line rounded-lg bg-paper-raised">
-        <h1 className="font-display text-2xl mb-2">Admin token</h1>
+        <h1 className="font-display text-2xl mb-2">{t("token_title")}</h1>
         <p className="text-ink-muted text-sm mb-4">
-          Paste the Bearer token (WEBMAIL_TOKEN or ADMIN_TOKEN).
+          {t("token_hint")}
         </p>
         <form className="flex gap-2" onSubmit={onToken}>
           <input
@@ -141,7 +141,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
             placeholder={t("token_placeholder")}
           />
           <button type="submit" className="text-xs px-3 py-1.5 border border-paper-line rounded">
-            Save
+            {t("token_submit")}
           </button>
         </form>
         <button
@@ -168,7 +168,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
       )}
       {forgotSent && (
         <div className="mb-4 text-sm text-accent border border-accent/30 rounded px-3 py-2 bg-accent/5">
-          If the address exists, a reset link was sent to the recovery email.
+          {t("forgot_sent")}
         </div>
       )}
       <form className="space-y-3" onSubmit={onLogin}>

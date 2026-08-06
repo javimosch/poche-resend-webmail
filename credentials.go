@@ -79,6 +79,16 @@ func sendResetEmail(mb *mailboxRecord, recovery, token string) error {
 	return err
 }
 
+// brandFor is the name shown in a tenant's sidebar: the mailbox's own brand,
+// then the deployment default, then the product name. One deployment serves
+// several clients, so this cannot be a single global string.
+func brandFor(mb *mailboxRecord) string {
+	if mb != nil && mb.Brand != "" {
+		return mb.Brand
+	}
+	return envOr("BRAND_NAME", "poche")
+}
+
 // maskSecret renders a credential for human/agent output without disclosing it.
 func maskSecret(s string) string {
 	if s == "" {

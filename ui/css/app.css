@@ -63,6 +63,14 @@ body {
 .prose-mail a { color: rgb(var(--accent)); text-decoration: underline; }
 .prose-mail p { margin: 0.6em 0; }
 
+/* Mail is written for arbitrary widths: plain-text bodies are pre-formatted,
+   senders hard-code table and image widths. Keep all of it inside the pane so
+   a narrow screen never scrolls sideways. */
+.prose-mail { overflow-wrap: anywhere; }
+.prose-mail pre { white-space: pre-wrap; word-break: break-word; }
+.prose-mail img { max-width: 100%; height: auto; }
+.prose-mail table { max-width: 100%; display: block; overflow-x: auto; }
+
 /* Inbound HTML assumes a white page and hard-codes colours like #333. On the
    dark theme that lands dark-on-dark, so HTML bodies get their own light
    surface — the same trick mail clients use. Plain text follows the theme. */
