@@ -37,7 +37,17 @@ export RESEND_WEBHOOK_SECRET=…      # optional; empty = insecure accept (dev)
 
 ## Persistence policy (v0.2.0+)
 
-The webmail layer keeps full email bodies in poche. By default, unstarred messages are purged when:
+The webmail layer keeps full email bodies in poche. **`retention_months: 0` does not mean "keep forever."** Zero is read as *unset*
+and falls back to `MAILBOX_RETENTION_MONTHS` (default 3), same for
+`max_messages` / `max_bytes` at 0. To actually keep mail indefinitely, set a
+large value (e.g. `--retention-months 1200`). The effective policy is reported
+by `GET /api/mailbox/usage` and shown under the storage bar in the sidebar.
+
+Note also that nothing purges on its own: `cleanup` runs only when invoked
+(CLI, `POST /api/cleanup`, or after `sync` when `AUTO_CLEANUP=1`). There is no
+scheduler on dk1, so the policy is currently stated but not enforced.
+
+By default, unstarred messages are purged when:
 - older than `MAILBOX_RETENTION_MONTHS` (default 3), or
 - the mailbox exceeds `MAILBOX_MAX_MESSAGES` (default 1000), or
 - the mailbox exceeds `MAILBOX_MAX_BYTES` (default 100 MB).
@@ -72,7 +82,7 @@ export POCHE_TOKEN=…  # admin token for poche
   --alias "florence@lacure.enbauges.fr,tom@lacure.enbauges.fr,flo@lacure.enbauges.com" \
   --max-bytes 524288000        # 500 MB
   --max-messages 10000          # optional
-  --retention-months 0          # 0 = keep forever
+  --retention-months 1200       # ~100 years; 0 would inherit the 3-month default
 ```
 
 ### Manage mailboxes

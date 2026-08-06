@@ -334,6 +334,29 @@ function StorageBar({ token }) {
       <div className="text-[0.7rem] text-ink-dim tabular-nums">
         {pct}% · {usage.message_count} msgs
       </div>
+      <RetentionNote usage={usage} />
+    </div>
+  );
+}
+
+// Mail disappearing on a schedule is surprising unless the schedule is stated.
+function RetentionNote({ usage }) {
+  const months = Number(usage.retention_months);
+  if (!months || months <= 0) return null;
+  const period = months === 1 ? "1 month" : months + " months";
+  const cap = usage.max_messages
+    ? " Also capped at " + usage.max_messages.toLocaleString() + " messages."
+    : "";
+  return (
+    <div
+      className="text-[0.7rem] text-ink-dim leading-snug"
+      title={
+        "Messages older than " + period +
+        " are removed automatically to stay within the mailbox quota. " +
+        "Starred messages are never removed." + cap
+      }
+    >
+      kept {period} · <span className="text-accent">★ kept forever</span>
     </div>
   );
 }

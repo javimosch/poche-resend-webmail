@@ -142,12 +142,12 @@ func (s *smtpServer) processEmail(from, rcpt, rawEmail string) {
 
 	// build the payload (same shape as Resend webhook)
 	payload := map[string]any{
-		"id":         messageID,
-		"from":       from,
-		"to":         []string{rcpt},
-		"subject":    subject,
-		"text":       textPart,
-		"html":       htmlPart,
+		"id":          messageID,
+		"from":        from,
+		"to":          []string{rcpt},
+		"subject":     subject,
+		"text":        textPart,
+		"html":        htmlPart,
 		"received_at": time.Now().UTC().Format(time.RFC3339),
 	}
 	if toHeader != "" {
@@ -276,13 +276,25 @@ func handleMailboxUsageAPI(w http.ResponseWriter, r *http.Request) {
 	if maxB > 0 {
 		pct = float64(used) * 100.0 / float64(maxB)
 	}
+	// The retention policy decides when mail disappears, so report the value
+	// actually in force — including the fallback a mailbox inherits when its
+	// own field is unset — rather than leaving users to guess.
+	retention := envFloat("MAILBOX_RETENTION_MONTHS", defaultRetentionMonths)
+	maxMsgs := envInt("MAILBOX_MAX_MESSAGES", defaultMaxMessages)
+	if mb != nil {
+		retention = mailboxFloat(mb.Doc, "retention_months", retention)
+		maxMsgs = mailboxInt(mb.Doc, "max_messages", maxMsgs)
+	}
 	writeJSON(w, 200, map[string]any{
 		"ok": true,
 		"data": map[string]any{
-			"used_bytes":    used,
-			"max_bytes":     maxB,
-			"percent":       pct,
-			"message_count": count,
+			"used_bytes":       used,
+			"max_bytes":        maxB,
+			"percent":          pct,
+			"message_count":    count,
+			"retention_months": retention,
+			"max_messages":     maxMsgs,
+			"starred_kept":     true,
 		},
 	})
 }
@@ -320,12 +332,12 @@ func handleSeedMailboxCmd() {
 		from := []string{"noreply@expediteur.fr", "contact@fournisseur.com", "hello@partenaire.fr"}[i%3]
 		body := fmt.Sprintf("Bonjour,\n\nCeci est l'email de test #%d pour le mailbox %s.\n\n%s\n\nCordialement,\nService test", i, mb.Address, padding)
 		payload := map[string]any{
-			"id":         fmt.Sprintf("seed-%d-%d@poche", i, time.Now().UnixNano()),
-			"from":       from,
-			"to":         []string{mb.Address},
-			"subject":    subject,
-			"text":       body,
-			"html":       "",
+			"id":          fmt.Sprintf("seed-%d-%d@poche", i, time.Now().UnixNano()),
+			"from":        from,
+			"to":          []string{mb.Address},
+			"subject":     subject,
+			"text":        body,
+			"html":        "",
 			"received_at": time.Now().UTC().Format(time.RFC3339),
 		}
 		_, err := upsertInbound(p, mb.ID, payload)
@@ -340,12 +352,12 @@ func handleSeedMailboxCmd() {
 	count2, used, _ := mailboxUsage(p, mb.ID)
 	_ = json.Marshal // keep import
 	outOK(map[string]any{
-		"seeded":        *count,
-		"address":       mb.Address,
-		"total_bytes":   totalBytes,
-		"actual_count":  count2,
-		"actual_bytes":  used,
-		"max_bytes":     mb.MaxBytes,
-		"percent":       int(used * 100 / mb.MaxBytes),
+		"seeded":       *count,
+		"address":      mb.Address,
+		"total_bytes":  totalBytes,
+		"actual_count": count2,
+		"actual_bytes": used,
+		"max_bytes":    mb.MaxBytes,
+		"percent":      int(used * 100 / mb.MaxBytes),
 	})
 }
