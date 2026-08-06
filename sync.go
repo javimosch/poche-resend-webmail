@@ -21,7 +21,61 @@ func syncInbound(limit int) (int, error) {
 		return 0, err
 	}
 	_ = ensureTags(p)
-	re := newResendFromEnv()
+
+	// Each tenant may own a separate Resend account, so poll every distinct
+	// key: the process-wide one plus any per-mailbox keys.
+	accounts := resendAccounts(p)
+	if len(accounts) == 0 {
+		return 0, fmt.Errorf("no Resend credentials (set RESEND_API_KEY or a per-mailbox key)")
+	}
+	total := 0
+	var lastErr error
+	failures := 0
+	for _, re := range accounts {
+		n, err := syncFromAccount(p, re, limit)
+		if err != nil {
+			failures++
+			lastErr = err
+			fmt.Fprintf(os.Stderr, "{\"event\":\"sync_account_err\",\"key\":%q,\"err\":%q}\n", maskSecret(re.Key), err.Error())
+			continue
+		}
+		total += n
+	}
+	if os.Getenv("AUTO_CLEANUP") == "1" {
+		if _, cErr := cleanup(); cErr != nil {
+			fmt.Fprintf(os.Stderr, "{\"event\":\"auto_cleanup_err\",\"err\":%q}\n", cErr.Error())
+		}
+	}
+	if failures == len(accounts) {
+		return 0, lastErr
+	}
+	return total, nil
+}
+
+// resendAccounts returns one client per distinct Resend key in play.
+func resendAccounts(p *Poche) []*Resend {
+	seen := map[string]bool{}
+	out := []*Resend{}
+	if env := newResendFromEnv(); env.enabled() {
+		seen[env.Key] = true
+		out = append(out, env)
+	}
+	mboxes, err := listAllMailboxes(p)
+	if err != nil {
+		return out
+	}
+	for i := range mboxes {
+		key := mboxes[i].ResendAPIKey
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, resendForMailbox(&mboxes[i]))
+	}
+	return out
+}
+
+func syncFromAccount(p *Poche, re *Resend, limit int) (int, error) {
 	items, err := re.listReceiving()
 	if err != nil {
 		return 0, err
@@ -71,11 +125,6 @@ func syncInbound(limit int) (int, error) {
 			n++
 		}
 	}
-	if os.Getenv("AUTO_CLEANUP") == "1" {
-		if _, cErr := cleanup(); cErr != nil {
-			fmt.Fprintf(os.Stderr, "{\"event\":\"auto_cleanup_err\",\"err\":%q}\n", cErr.Error())
-		}
-	}
 	if dropped > 0 {
 		fmt.Fprintf(os.Stderr, "{\"event\":\"sync_dropped\",\"count\":%d}\n", dropped)
 	}
@@ -114,7 +163,9 @@ func upsertInbound(p *Poche, mailboxID string, doc map[string]any) (created bool
 		subj = "(no subject)"
 	}
 	text := strField(doc, "text")
-	html := strField(doc, "html")
+	// Sender-controlled markup is sanitized before it is ever stored, so no
+	// render path has to trust it.
+	html := sanitizeEmailHTML(strField(doc, "html"))
 	mid := strField(doc, "message_id")
 	preview := text
 	if len(preview) > 160 {
@@ -129,24 +180,25 @@ func upsertInbound(p *Poche, mailboxID string, doc map[string]any) (created bool
 	search := strings.ToLower(subj + " " + from + " " + to + " " + text)
 	createdAt := time.Now().UnixMilli()
 	msg := map[string]any{
-		"mailbox_id":    mailboxID,
-		"from_addr":     from,
-		"to_addr":       to,
-		"subject":       subj,
-		"preview":       preview,
-		"body_text":     text,
-		"body_html":     html,
-		"search_text":   search,
-		"thread_id":     mid,
-		"unread":        true,
-		"starred":       false,
-		"resend_id":     resendID,
-		"message_id":    mid,
-		"received_for":  rf,
-		"direction":     "in",
-		"in_reply_to":   "",
-		"references":    "",
-		"created_at":    createdAt,
+		"mailbox_id":     mailboxID,
+		"from_addr":      from,
+		"to_addr":        to,
+		"subject":        subj,
+		"preview":        preview,
+		"body_text":      text,
+		"body_html":      html,
+		"html_sanitized": true,
+		"search_text":    search,
+		"thread_id":      mid,
+		"unread":         true,
+		"starred":        false,
+		"resend_id":      resendID,
+		"message_id":     mid,
+		"received_for":   rf,
+		"direction":      "in",
+		"in_reply_to":    "",
+		"references":     "",
+		"created_at":     createdAt,
 	}
 	raw, err := p.Create("messages", msg)
 	if err != nil {

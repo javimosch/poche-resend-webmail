@@ -105,34 +105,27 @@ func handleResetPasswordCmd() {
 	if err != nil {
 		fail(100, "integration", "create token: "+err.Error(), "")
 	}
-	// send the reset email via Resend
-	re := newResendFromEnv()
-	if !re.enabled() {
+	// send the reset email through the mailbox's own Resend account
+	if !resendForMailbox(mb).enabled() {
 		// if Resend is not configured, output the token for manual delivery
 		outOK(map[string]any{
-			"sent":          false,
-			"token":         token,
+			"sent":           false,
+			"token":          token,
 			"recovery_email": recovery,
-			"note":          "RESEND_API_KEY not set — deliver this token manually",
+			"note":           "RESEND_API_KEY not set — deliver this token manually",
 		})
 		return
 	}
-	resetURL := envOr("WEBMAIL_URL", "http://localhost:3090") + "/?reset_token=" + token
-	payload := map[string]any{
-		"from":    envOr("RESET_FROM", "noreply@intrane.fr"),
-		"to":      []string{recovery},
-		"subject": "Password reset — poche webmail",
-		"text": fmt.Sprintf(
-			"A password reset was requested for %s.\n\n"+
-				"Click the link below to set a new password (valid 1 hour):\n%s\n\n"+
-				"If you did not request this, ignore this email.",
-			mb.Address, resetURL,
-		),
-	}
-	if _, err := re.sendEmail(payload); err != nil {
+	if err := sendResetEmail(mb, recovery, token); err != nil {
 		fail(100, "integration", "send reset email: "+err.Error(), "")
 	}
-	outOK(map[string]any{"sent": true, "recovery_email": recovery, "mailbox": mb.Address})
+	outOK(map[string]any{
+		"sent":           true,
+		"recovery_email": recovery,
+		"mailbox":        mb.Address,
+		"reset_url_base": webmailURLForMailbox(mb),
+		"from":           resetFromForMailbox(mb),
+	})
 }
 
 // ─── API: POST /api/reset-password ──────────────────────────────────────
@@ -231,21 +224,8 @@ func handleForgotPasswordAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]any{"ok": false, "error": "token: " + err.Error()})
 		return
 	}
-	re := newResendFromEnv()
-	if re.enabled() {
-		resetURL := envOr("WEBMAIL_URL", "http://localhost:3090") + "/?reset_token=" + token
-		payload := map[string]any{
-			"from":    envOr("RESET_FROM", "noreply@intrane.fr"),
-			"to":      []string{recovery},
-			"subject": "Password reset — poche webmail",
-			"text": fmt.Sprintf(
-				"A password reset was requested for %s.\n\n"+
-					"Click the link below to set a new password (valid 1 hour):\n%s\n\n"+
-					"If you did not request this, ignore this email.",
-				mb.Address, resetURL,
-			),
-		}
-		_, _ = re.sendEmail(payload)
+	if err := sendResetEmail(mb, recovery, token); err != nil {
+		fmt.Fprintf(os.Stderr, "{\"event\":\"reset_send_err\",\"mailbox\":%q,\"err\":%q}\n", mb.Address, err.Error())
 	}
 	// always return the same response regardless of whether the address exists
 	writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"sent": "if the address exists, a reset email was sent"}})

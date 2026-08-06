@@ -287,6 +287,27 @@ func getMailboxByID(p *Poche, id string) (*mailboxRecord, error) {
 	return parseMailbox(id, wrap.Doc), nil
 }
 
+// findMailboxRecordForAddress resolves an inbound recipient to its mailbox
+// record (primary address or alias). Returns nil when nothing matches.
+func findMailboxRecordForAddress(p *Poche, addr string) (*mailboxRecord, error) {
+	addr = strings.ToLower(strings.Trim(addr, "<>"))
+	if addr == "" {
+		return nil, nil
+	}
+	mb, err := findMailboxByAddress(p, addr)
+	if err != nil {
+		return nil, err
+	}
+	if mb != nil {
+		return mb, nil
+	}
+	mb, err = findMailboxByAlias(p, addr)
+	if err != nil {
+		return nil, err
+	}
+	return mb, nil
+}
+
 // findOrCreateMailboxForAddress routes inbound email to the right mailbox.
 // Checks both mailboxes.address and aliases.address.
 // Returns empty string if no mailbox matches (email is dropped).

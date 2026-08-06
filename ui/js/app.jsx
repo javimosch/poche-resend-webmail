@@ -32,6 +32,8 @@ function App() {
   const [offset, setOffset] = useState(0);
   const [checked, setChecked] = useState([]);
   const [selectAllPages, setSelectAllPages] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [sendAddresses, setSendAddresses] = useState([]);
   const pageSize = 50;
   const ctxRef = useRef({ view: "inbox", tagView: "", q: "" });
 
@@ -82,6 +84,14 @@ function App() {
       .then((d) => setStatus(d))
       .catch(() => {});
   }, [token, total]);
+
+  useEffect(() => {
+    if (!token) {
+      setSendAddresses([]);
+      return;
+    }
+    fetchSendAddresses(token).then(setSendAddresses);
+  }, [token]);
 
   const loadList = useCallback(() => {
     if (!token) return;
@@ -247,6 +257,16 @@ function App() {
       .finally(() => setBusy(false));
   };
 
+  const onCompose = (body) => {
+    setBusy(true);
+    return composeMail(token, body)
+      .then((res) => {
+        refreshAfter();
+        return res;
+      })
+      .finally(() => setBusy(false));
+  };
+
   if (err) return <div className="p-8 text-red-400">Config error: {err}</div>;
   if (!cfg) return <div className="p-8 text-ink-muted">Booting…</div>;
   if (!token) {
@@ -311,6 +331,10 @@ function App() {
       pageSize={pageSize}
       account={account}
       onLogout={() => { clearAuth(); setPassword(""); }}
+      composeOpen={composeOpen}
+      setComposeOpen={setComposeOpen}
+      sendAddresses={sendAddresses}
+      onCompose={onCompose}
     />
   );
 }

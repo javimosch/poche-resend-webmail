@@ -13,12 +13,14 @@ import (
 
 type Resend struct {
 	Key    string
+	Base   string
 	Client *http.Client
 }
 
 func newResendFromEnv() *Resend {
 	return &Resend{
 		Key:    os.Getenv("RESEND_API_KEY"),
+		Base:   envOr("RESEND_BASE_URL", "https://api.resend.com"),
 		Client: &http.Client{Timeout: 60 * time.Second},
 	}
 }
@@ -37,7 +39,11 @@ func (r *Resend) do(method, path string, body any) (int, []byte, error) {
 		}
 		rdr = bytes.NewReader(b)
 	}
-	req, err := http.NewRequest(method, "https://api.resend.com"+path, rdr)
+	base := r.Base
+	if base == "" {
+		base = "https://api.resend.com"
+	}
+	req, err := http.NewRequest(method, base+path, rdr)
 	if err != nil {
 		return 0, nil, err
 	}
