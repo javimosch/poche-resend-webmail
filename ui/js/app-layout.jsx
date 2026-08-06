@@ -44,6 +44,7 @@ function AppLayout({
   sendAddresses,
   onCompose,
 }) {
+  const { t } = useI18n();
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.floor(offset / pageSize) + 1;
 
@@ -67,14 +68,14 @@ function AppLayout({
       />
       <section className="w-[400px] shrink-0 border-r border-paper-line flex flex-col bg-paper/40">
         <div className="px-4 py-3 border-b border-paper-line flex items-center justify-between">
-          <span className="text-sm text-ink-muted">{viewLabel(view, tagView)}</span>
+          <span className="text-sm text-ink-muted">{viewLabel(view, tagView, t)}</span>
           <div className="flex gap-1 items-center">
             <button
               disabled={offset <= 0}
               onClick={() => setOffset(Math.max(0, offset - pageSize))}
               className="text-xs px-2 py-1 border border-paper-line rounded disabled:opacity-30"
             >
-              Prev
+              {t("prev")}
             </button>
             <span className="text-[0.76rem] font-mono text-ink-dim px-1 tabular-nums">
               {page}/{pages}
@@ -84,7 +85,7 @@ function AppLayout({
               onClick={() => setOffset(offset + pageSize)}
               className="text-xs px-2 py-1 border border-paper-line rounded disabled:opacity-30"
             >
-              Next
+              {t("next")}
             </button>
           </div>
         </div>

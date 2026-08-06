@@ -159,10 +159,10 @@ function toggleStar(token, id) {
   });
 }
 
-function formatWhen(ms) {
+function formatWhen(ms, locale) {
   if (!ms) return "";
   const d = new Date(typeof ms === "number" && ms < 1e12 ? ms * 1000 : ms);
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(locale || undefined, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -192,11 +192,12 @@ function tagNamesFromPage(data) {
     .filter(Boolean);
 }
 
-function viewLabel(view, tagView) {
-  if (view === "archive") return "Archive";
-  if (view === "sent") return "Sent";
+function viewLabel(view, tagView, t) {
+  const tr = t || ((k) => k);
+  if (view === "archive") return tr("archive");
+  if (view === "sent") return tr("sent");
   if (view === "tag") return "#" + tagView;
-  return "Inbox";
+  return tr("inbox");
 }
 
 function appendViewLinks(params, view, tagView) {

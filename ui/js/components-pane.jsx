@@ -13,6 +13,7 @@ function MessagePane({
   busy,
   account,
 }) {
+  const { t, lang } = useI18n();
   const [reply, setReply] = React.useState("");
   React.useEffect(() => {
     setReply("");
@@ -20,7 +21,7 @@ function MessagePane({
   if (!msg) {
     return (
       <div className="h-full flex items-center justify-center text-ink-dim text-sm">
-        Select a message
+        {t("select_message")}
       </div>
     );
   }
@@ -39,14 +40,14 @@ function MessagePane({
         <h1 className="font-display text-2xl text-balance text-ink">{msg.subject}</h1>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-muted">
           <span>
-            <span className="text-ink-dim">From </span>
+            <span className="text-ink-dim">{t("from")} </span>
             {msg.from_addr}
           </span>
           <span>
-            <span className="text-ink-dim">To </span>
+            <span className="text-ink-dim">{t("to")} </span>
             {msg.to_addr}
           </span>
-          <span className="font-mono text-xs tabular-nums">{formatWhen(msg.created_at)}</span>
+          <span className="font-mono text-xs tabular-nums">{formatWhen(msg.created_at, lang)}</span>
         </div>
         {chips.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
@@ -75,29 +76,29 @@ function MessagePane({
                 rel="noopener noreferrer"
                 className="text-xs text-accent underline"
               >
-                {a.filename || "attachment"}
+                {a.filename || t("attachment")}
               </a>
             ))}
           </div>
         )}
         <div className="mt-3 flex flex-wrap gap-1.5">
           <button onClick={onToggleUnread} className={btn}>
-            Mark {msg.unread ? "read" : "unread"}
+            {msg.unread ? t("mark_read") : t("mark_unread")}
           </button>
           <button onClick={() => onStar(msg.id, !msg.starred)} className={btn}>
-            {msg.starred ? "Unstar" : "Star"}
+            {msg.starred ? t("unstar") : t("star")}
           </button>
           {archived ? (
             <button onClick={onUnarchive} className={btn}>
-              Unarchive
+              {t("unarchive")}
             </button>
           ) : (
             <button onClick={onArchive} className={btn}>
-              Archive
+              {t("archive_action")}
             </button>
           )}
           <button onClick={onDelete} className={btn}>
-            Delete
+            {t("delete")}
           </button>
         </div>
       </header>
@@ -115,18 +116,18 @@ function MessagePane({
           }}
         >
           <div className="text-xs text-ink-dim">
-            <span className="text-ink-dim/70">From </span>
+            <span className="text-ink-dim/70">{t("from")} </span>
             <span className="text-ink">{account?.address || msg.received_for || msg.to_addr || "—"}</span>
           </div>
           <textarea
             value={reply}
             onChange={(e) => setReply(e.target.value)}
             rows={3}
-            placeholder="Reply…"
+            placeholder={t("reply_placeholder")}
             className="w-full bg-paper border border-paper-line rounded px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-accent"
           />
           <button type="submit" disabled={busy || !reply.trim()} className={btn}>
-            Send reply
+            {t("send_reply")}
           </button>
         </form>
       )}

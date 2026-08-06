@@ -1,4 +1,5 @@
 function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, token }) {
+  const { t } = useI18n();
   const [from, setFrom] = React.useState(defaultFrom || "");
   const [to, setTo] = React.useState("");
   const [cc, setCc] = React.useState("");
@@ -43,12 +44,12 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
     if (busy) return;
     setError("");
     setSent("");
-    if (!to.trim()) return setError("Add at least one recipient.");
-    if (!subject.trim()) return setError("Subject is required.");
-    if (!text.trim()) return setError("Message body is required.");
+    if (!to.trim()) return setError(t("err_recipient"));
+    if (!subject.trim()) return setError(t("err_subject"));
+    if (!text.trim()) return setError(t("err_body"));
     onSend({ from, to: to.trim(), cc: cc.trim(), bcc: bcc.trim(), subject: subject.trim(), text, format })
       .then((res) => {
-        setSent("Sent to " + (Array.isArray(res?.to) ? res.to.join(", ") : to.trim()));
+        setSent(t("sent_to", Array.isArray(res?.to) ? res.to.join(", ") : to.trim()));
         reset();
       })
       .catch((err) => setError(String(err.message || err)));
@@ -66,15 +67,15 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
         className="w-full max-w-2xl bg-paper-raised border border-paper-line rounded-lg shadow-2xl flex flex-col max-h-full"
       >
         <header className="px-5 py-3 border-b border-paper-line flex items-center justify-between">
-          <span className="font-display text-lg text-ink">New message</span>
+          <span className="font-display text-lg text-ink">{t("new_message")}</span>
           <button type="button" onClick={onClose} className={btn}>
-            Close
+            {t("close")}
           </button>
         </header>
 
         <div className="px-5 py-4 space-y-3 overflow-y-auto scrollbar-thin">
           <label className="block">
-            <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">From</span>
+            <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">{t("from")}</span>
             {(addresses || []).length > 1 ? (
               <select value={from} onChange={(e) => setFrom(e.target.value)} className={field}>
                 {(addresses || []).map((a) => (
@@ -89,11 +90,11 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
           </label>
 
           <label className="block">
-            <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">To</span>
+            <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">{t("to")}</span>
             <input
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              placeholder="someone@example.com, other@example.com"
+              placeholder={t("to_placeholder")}
               className={field}
               autoFocus
             />
@@ -102,31 +103,31 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
           {showCc ? (
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
-                <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">Cc</span>
+                <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">{t("cc")}</span>
                 <input value={cc} onChange={(e) => setCc(e.target.value)} className={field} />
               </label>
               <label className="block">
-                <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">Bcc</span>
+                <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">{t("bcc")}</span>
                 <input value={bcc} onChange={(e) => setBcc(e.target.value)} className={field} />
               </label>
             </div>
           ) : (
             <button type="button" onClick={() => setShowCc(true)} className={btn}>
-              Add Cc / Bcc
+              {t("add_cc")}
             </button>
           )}
 
           <label className="block">
-            <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">Subject</span>
+            <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">{t("subject")}</span>
             <input value={subject} onChange={(e) => setSubject(e.target.value)} className={field} />
           </label>
 
           <div className="flex items-center justify-between gap-2">
             <div className="flex gap-1">
               {[
-                ["text", "Plain"],
-                ["markdown", "Markdown"],
-                ["html", "HTML"],
+                ["text", t("fmt_plain")],
+                ["markdown", t("fmt_markdown")],
+                ["html", t("fmt_html")],
               ].map(([value, name]) => (
                 <button
                   key={value}
@@ -154,13 +155,13 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
                     // Ask the server so the preview is the very same output that
                     // would be sent, sanitizer included.
                     renderBodyPreview(token, text, format)
-                      .then((d) => setPreviewHtml(d.html || "<p><em>(empty)</em></p>"))
-                      .catch((err) => setPreviewHtml("<p>Preview failed: " + String(err.message || err) + "</p>"));
+                      .then((d) => setPreviewHtml(d.html || "<p><em>" + t("empty") + "</em></p>"))
+                      .catch((err) => setPreviewHtml("<p>" + t("preview_failed", String(err.message || err)) + "</p>"));
                   }
                 }}
                 className={btn}
               >
-                {preview ? "Edit" : "Preview"}
+                {preview ? t("edit") : t("preview")}
               </button>
             )}
           </div>
@@ -192,15 +193,15 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
 
         <footer className="px-5 py-3 border-t border-paper-line flex items-center gap-2">
           <button type="submit" disabled={busy} className={btn + " disabled:opacity-40"}>
-            {busy ? "Sending…" : "Send"}
+            {busy ? t("sending") : t("send")}
           </button>
           <span className="text-xs text-ink-dim">
             {format === "markdown"
-              ? "Markdown → HTML on send"
+              ? t("note_markdown")
               : format === "html"
-                ? "HTML is sanitized before sending"
-                : "Plain text"}
-            {" · attachments not supported yet"}
+                ? t("note_html")
+                : t("note_plain")}
+            {t("note_attachments")}
           </span>
         </footer>
       </form>

@@ -189,6 +189,23 @@ GET /api/mailbox/addresses
 `RESEND_BASE_URL` overrides the Resend API host (default
 `https://api.resend.com`) so sends can be pointed at a stub in tests.
 
+## i18n (v0.3.4+)
+
+UI strings live in `ui/js/i18n.jsx` as `{en, fr}` dictionaries; values may be
+functions when interpolation is needed, so word order and plurals stay inside
+the translation. English is the fallback — a missing French key renders the
+English string rather than a bare key, so a partial translation degrades
+readably.
+
+- Language is per-browser (`localStorage.webmail_lang`), first visit follows
+  `navigator.language`, and the EN/FR switch sits in the sidebar. It applies
+  live, without a reload, and sets `<html lang>`.
+- Dates go through `formatWhen(ms, lang)` so months localise too.
+- Watch for one noun/verb trap: `archive` is the folder, `archive_action` is
+  the button. Reusing one key gave a French pane button reading "Archives".
+
+Adding a language = one more block in `I18N` plus its code in `LANGS`.
+
 ## Compose formats (v0.3.3+)
 
 `POST /api/compose` takes `format`: `text` (default), `html`, or `markdown`.

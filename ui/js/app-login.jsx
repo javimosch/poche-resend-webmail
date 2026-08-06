@@ -1,4 +1,5 @@
 function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, setAddress, password, setPassword, loginMode, setLoginMode, loginError, setLoginError, resetToken, setResetToken, setResetMode }) {
+  const { t } = useI18n();
   const [forgotSent, setForgotSent] = React.useState(false);
   const [remember, setRemember] = React.useState(() => !!getRememberedCreds());
 
@@ -86,7 +87,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
   if (loginMode === "reset") {
     return (
       <div className="max-w-lg mx-auto mt-24 p-8 border border-paper-line rounded-lg bg-paper-raised">
-        <h1 className="font-display text-2xl mb-2">Set new password</h1>
+        <h1 className="font-display text-2xl mb-2">{t("reset_title")}</h1>
         <p className="text-ink-muted text-sm mb-4">
           Enter the reset token and your new password.
         </p>
@@ -100,7 +101,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
             value={resetToken}
             onChange={(e) => setResetToken(e.target.value)}
             className="w-full bg-paper border border-paper-line rounded px-2 py-1.5 text-sm font-mono"
-            placeholder="reset token"
+            placeholder={t("reset_token")}
             autoFocus
           />
           <input
@@ -108,7 +109,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full bg-paper border border-paper-line rounded px-2 py-1.5 text-sm"
-            placeholder="new password"
+            placeholder={t("reset_new")}
           />
           <button type="submit" className="w-full text-sm px-3 py-1.5 border border-paper-line rounded hover:bg-paper-line">
             Reset password
@@ -118,7 +119,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
           className="mt-4 text-xs text-ink-muted hover:text-accent"
           onClick={() => { setLoginMode("password"); setLoginError(""); }}
         >
-          ← Back to login
+          {t("login_back")}
         </button>
       </div>
     );
@@ -137,7 +138,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
             value={tokenInput}
             onChange={(e) => setTokenInput(e.target.value)}
             className="flex-1 bg-paper border border-paper-line rounded px-2 py-1.5 text-sm"
-            placeholder="token"
+            placeholder={t("token_placeholder")}
           />
           <button type="submit" className="text-xs px-3 py-1.5 border border-paper-line rounded">
             Save
@@ -147,7 +148,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
           className="mt-4 text-xs text-ink-muted hover:text-accent"
           onClick={() => setLoginMode("password")}
         >
-          ← Back to login
+          {t("login_back")}
         </button>
       </div>
     );
@@ -156,9 +157,9 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
   // ─── default: password login ────────────────────────────────────────
   return (
     <div className="max-w-lg mx-auto mt-24 p-8 border border-paper-line rounded-lg bg-paper-raised">
-      <h1 className="font-display text-2xl mb-2">Webmail login</h1>
+      <h1 className="font-display text-2xl mb-2">{t("login_title")}</h1>
       <p className="text-ink-muted text-sm mb-4">
-        Sign in with your email address and password.
+        {t("login_hint")}
       </p>
       {loginError && (
         <div className="mb-4 text-sm text-red-400 border border-red-400/30 rounded px-3 py-2 bg-red-400/5">
@@ -175,7 +176,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
           value={address}
           onChange={(e) => setAddress(e.target.value)}
           className="w-full bg-paper border border-paper-line rounded px-2 py-1.5 text-sm"
-          placeholder="email address"
+          placeholder={t("login_address")}
           autoFocus
         />
         <input
@@ -183,7 +184,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full bg-paper border border-paper-line rounded px-2 py-1.5 text-sm"
-          placeholder="password"
+          placeholder={t("login_password")}
         />
         <label className="flex items-center gap-2 text-xs text-ink-dim cursor-pointer">
           <input
@@ -192,10 +193,10 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
             onChange={(e) => setRemember(e.target.checked)}
             className="accent-accent"
           />
-          Remember me
+          {t("login_remember")}
         </label>
         <button type="submit" className="w-full text-sm px-3 py-1.5 border border-paper-line rounded hover:bg-paper-line">
-          Sign in
+          {t("login_submit")}
         </button>
       </form>
       <div className="mt-4 flex justify-between text-xs">
@@ -203,13 +204,13 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
           className="text-ink-muted hover:text-accent"
           onClick={onForgot}
         >
-          Forgot password?
+          {t("login_forgot")}
         </button>
         <button
           className="text-ink-muted hover:text-accent"
           onClick={() => setLoginMode("token")}
         >
-          Admin? Use a token →
+          {t("login_admin")}
         </button>
       </div>
     </div>

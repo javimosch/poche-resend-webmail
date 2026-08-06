@@ -1,6 +1,7 @@
 const { useState, useEffect, useCallback, useRef } = React;
 
 function App() {
+  const { t } = useI18n();
   const { cfg, err, token, account, setToken, setAccount, clearAuth } = useConfig();
   const [tokenInput, setTokenInput] = useState(token || "");
   const [address, setAddress] = useState("");
@@ -282,8 +283,8 @@ function App() {
       .finally(() => setBusy(false));
   };
 
-  if (err) return <div className="p-8 text-red-400">Config error: {err}</div>;
-  if (!cfg) return <div className="p-8 text-ink-muted">Booting…</div>;
+  if (err) return <div className="p-8 text-red-400">{t("config_error", err)}</div>;
+  if (!cfg) return <div className="p-8 text-ink-muted">{t("booting")}</div>;
   if (!token) {
     return (
       <LoginForm
@@ -356,4 +357,8 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <LangProvider>
+    <App />
+  </LangProvider>
+);
