@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -47,6 +48,15 @@ func handleBulkAPI(w http.ResponseWriter, r *http.Request) {
 		if req.Action == "mark_read_all" {
 			req.Action = "mark_read"
 		}
+	}
+
+	// Destructive bulk actions are logged with who and how many: after a
+	// mailbox was emptied twice with no record of it, "we cannot tell what
+	// deleted this" was the expensive part, not the deletion itself.
+	if req.Action == "delete" || req.AllPages {
+		fmt.Fprintf(os.Stderr,
+			"{\"event\":\"bulk_action\",\"action\":%q,\"count\":%d,\"all_pages\":%v,\"view\":%q,\"tag_view\":%q,\"mailbox\":%q,\"admin\":%v}\n",
+			req.Action, len(ids), req.AllPages, req.View, req.TagView, mbID, isAdmin)
 	}
 
 	okN := 0
