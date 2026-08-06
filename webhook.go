@@ -95,7 +95,11 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	re := resendForMailbox(mb)
 	full, err := re.getReceiving(emailID)
 	if err != nil {
-		// metadata-only fallback from webhook payload
+		// Metadata-only fallback. Worth saying out loud: the webhook payload
+		// has no attachment contents, so a restricted (send-only) key means
+		// attachments arrive as names with nothing behind them.
+		fmt.Fprintf(os.Stderr, "{\"event\":\"webhook_content_fetch_failed\",\"email_id\":%q,\"err\":%q,\"note\":\"stored from webhook metadata; attachments will have no content\"}\n",
+			emailID, err.Error())
 		full = evt.Data
 		full["id"] = emailID
 	}
