@@ -164,7 +164,7 @@ func handleMailboxCmd() {
 func mailboxCreateCmd() {
 	fs := newFlagSet("mailbox create")
 	addr := fs.String("address", "", "email address for this mailbox")
-	password := fs.String("password", "", "login password")
+	password := fs.String("password", "", "login password ('-' = read stdin, 'env:NAME' = read env)")
 	name := fs.String("name", "", "display name (defaults to address)")
 	maxBytes := fs.Int64("max-bytes", 100*1024*1024, "storage cap in bytes")
 	maxMessages := fs.Int("max-messages", 1000, "max message count")
@@ -200,7 +200,11 @@ func mailboxCreateCmd() {
 	if existing != nil {
 		fail(80, "input", "mailbox already exists: "+*addr, "mailbox update "+*addr+" --max-bytes ...")
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.DefaultCost)
+	pw, err := readSecretFlag(*password)
+	if err != nil {
+		fail(80, "input", "--password: "+err.Error(), "")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
 	if err != nil {
 		fail(110, "internal", "bcrypt: "+err.Error(), "")
 	}
@@ -316,7 +320,7 @@ func mailboxListCmd() {
 func mailboxUpdateCmd() {
 	fs := newFlagSet("mailbox update")
 	addr := fs.String("address", "", "mailbox address to update")
-	password := fs.String("password", "", "new password (if changing)")
+	password := fs.String("password", "", "new password ('-' = read stdin, 'env:NAME' = read env)")
 	maxBytes := fs.Int64("max-bytes", 0, "storage cap in bytes (0 = unchanged)")
 	maxMessages := fs.Int("max-messages", 0, "max message count (0 = unchanged)")
 	retention := fs.Float64("retention-months", -1, "retention (negative = unchanged)")
@@ -349,7 +353,11 @@ func mailboxUpdateCmd() {
 	}
 	doc := mb.Doc
 	if *password != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.DefaultCost)
+		pw, err := readSecretFlag(*password)
+		if err != nil {
+			fail(80, "input", "--password: "+err.Error(), "")
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
 		if err != nil {
 			fail(110, "internal", "bcrypt: "+err.Error(), "")
 		}
