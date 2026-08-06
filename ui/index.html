@@ -9,13 +9,38 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
+    // Apply the stored theme before first paint, otherwise a light-theme user
+    // gets a dark flash on every load.
+    (function () {
+      try {
+        var t = localStorage.getItem('webmail_theme');
+        document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+      } catch (_) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <script>
     tailwind.config = {
       theme: {
         extend: {
+          // Colours resolve through CSS variables so one palette swap flips the
+          // whole UI; the <alpha-value> form keeps modifiers like bg-paper/40.
           colors: {
-            ink: { DEFAULT: '#e8e6e1', muted: '#9a958c', dim: '#5c574f' },
-            paper: { DEFAULT: '#12110f', raised: '#1a1815', line: '#2a2722' },
-            accent: { DEFAULT: '#c4a574', soft: '#c4a57422' },
+            ink: {
+              DEFAULT: 'rgb(var(--ink) / <alpha-value>)',
+              muted: 'rgb(var(--ink-muted) / <alpha-value>)',
+              dim: 'rgb(var(--ink-dim) / <alpha-value>)',
+            },
+            paper: {
+              DEFAULT: 'rgb(var(--paper) / <alpha-value>)',
+              raised: 'rgb(var(--paper-raised) / <alpha-value>)',
+              line: 'rgb(var(--paper-line) / <alpha-value>)',
+            },
+            accent: {
+              DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+              soft: 'rgb(var(--accent) / 0.14)',
+            },
           },
           fontFamily: {
             display: ['"Iowan Old Style"', 'Palatino', 'Georgia', 'ui-serif', 'serif'],

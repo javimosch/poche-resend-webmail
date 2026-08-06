@@ -72,7 +72,7 @@ function AppLayout({
             >
               Prev
             </button>
-            <span className="text-[11px] font-mono text-ink-dim px-1 tabular-nums">
+            <span className="text-[0.76rem] font-mono text-ink-dim px-1 tabular-nums">
               {page}/{pages}
             </span>
             <button

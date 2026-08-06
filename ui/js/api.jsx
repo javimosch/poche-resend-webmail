@@ -82,6 +82,35 @@ function clearRememberedCreds() {
   } catch (_) {}
 }
 
+// ─── theme ──────────────────────────────────────────────────────────────
+// Dark stays the default; the choice is per-browser and applied to <html> so
+// the CSS variables in app.css swap the whole palette.
+
+function getTheme() {
+  try {
+    return localStorage.getItem("webmail_theme") === "light" ? "light" : "dark";
+  } catch (_) {
+    return "dark";
+  }
+}
+
+function applyTheme(theme) {
+  const t = theme === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", t);
+  try {
+    localStorage.setItem("webmail_theme", t);
+  } catch (_) {}
+  return t;
+}
+
+function useTheme() {
+  const [theme, setTheme] = React.useState(getTheme);
+  React.useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+  return [theme, () => setTheme((t) => (t === "light" ? "dark" : "light"))];
+}
+
 function useConfig() {
   const [cfg, setCfg] = React.useState(null);
   const [err, setErr] = React.useState("");

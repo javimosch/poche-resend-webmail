@@ -1,28 +1,82 @@
-/* poche-webmail-demo — artifact-like shell (not cream/terracotta AI defaults) */
+/* poche-resend-webmail — artifact-like shell (not cream/terracotta AI defaults) */
 
-:root {
+/* Palette lives here as rgb triplets so Tailwind's rgb(var(--x) / <alpha-value>)
+   colours work, and switching data-theme repaints the whole UI. */
+:root,
+:root[data-theme="dark"] {
   color-scheme: dark;
+  --ink: 232 230 225;
+  --ink-muted: 154 149 140;
+  --ink-dim: 122 116 106;
+  --paper: 18 17 15;
+  --paper-raised: 26 24 21;
+  --paper-line: 42 39 34;
+  --accent: 196 165 116;
+  --page-glow-a: 196 165 116;
+  --page-glow-b: 61 90 108;
+  --glow-strength: 0.08;
+  --row-hover: 31 28 24;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ink: 28 25 21;
+  --ink-muted: 88 81 72;
+  --ink-dim: 124 116 105;
+  --paper: 250 248 244;
+  --paper-raised: 255 255 255;
+  --paper-line: 223 216 205;
+  --accent: 138 102 40;
+  --page-glow-a: 196 165 116;
+  --page-glow-b: 120 150 170;
+  --glow-strength: 0.10;
+  --row-hover: 240 236 228;
 }
 
 html, body, #root {
   height: 100%;
 }
 
+/* Client feedback: the UI read too small. Everything sizes in rem, so lifting
+   the root size scales the whole interface rather than one-off classes. */
+html {
+  font-size: 17.5px;
+}
+
 body {
   margin: 0;
+  color: rgb(var(--ink));
   background:
-    radial-gradient(1200px 600px at 10% -10%, #c4a57414, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #3d5a6c18, transparent 50%),
-    #12110f;
+    radial-gradient(1200px 600px at 10% -10%, rgb(var(--page-glow-a) / var(--glow-strength)), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgb(var(--page-glow-b) / var(--glow-strength)), transparent 50%),
+    rgb(var(--paper));
 }
 
 .text-balance { text-wrap: balance; }
 
-.mail-row:hover { background: #1f1c18; }
-.mail-row.active { background: #c4a57418; border-left-color: #c4a574; }
+.mail-row:hover { background: rgb(var(--row-hover)); }
+.mail-row.active { background: rgb(var(--accent) / 0.12); border-left-color: rgb(var(--accent)); }
 
 .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: #2a2722; border-radius: 4px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(var(--paper-line)); border-radius: 4px; }
 
-.prose-mail a { color: #c4a574; text-decoration: underline; }
+.prose-mail a { color: rgb(var(--accent)); text-decoration: underline; }
 .prose-mail p { margin: 0.6em 0; }
+
+/* Inbound HTML assumes a white page and hard-codes colours like #333. On the
+   dark theme that lands dark-on-dark, so HTML bodies get their own light
+   surface — the same trick mail clients use. Plain text follows the theme. */
+:root[data-theme="dark"] .prose-mail--html {
+  background: #f7f5f0;
+  color: #1f1c18;
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+  margin: 0.5rem;
+}
+:root[data-theme="dark"] .prose-mail--html a { color: #7a5a1f; }
+
+/* Form controls follow the theme rather than the OS default. */
+input, textarea, select, button {
+  font: inherit;
+  color: inherit;
+}

@@ -26,7 +26,7 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
     <aside className="w-52 shrink-0 border-r border-paper-line bg-paper-raised/60 flex flex-col">
       <div className="px-4 py-5 border-b border-paper-line">
         <div className="font-display text-xl tracking-tight text-ink">poche</div>
-        <div className="text-[11px] uppercase tracking-[0.18em] text-ink-dim mt-1">resend webmail</div>
+        <div className="text-[0.76rem] uppercase tracking-[0.18em] text-ink-dim mt-1">resend webmail</div>
       </div>
       <nav className="p-2 flex-1 overflow-y-auto scrollbar-thin">
         <button
@@ -53,7 +53,7 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
         >
           {label("Archive", unread.archive || 0)}
         </button>
-        <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider text-ink-dim">Tags</div>
+        <div className="px-3 pt-3 pb-1 text-[0.7rem] uppercase tracking-wider text-ink-dim">Tags</div>
         {userTags.map((name) => {
           const n = unread.tags?.[name] || 0;
           return (
@@ -76,13 +76,13 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
           <button
             type="submit"
             disabled={tagBusy || !newTag.trim()}
-            className="text-[10px] px-1.5 py-1 rounded border border-paper-line text-ink-muted hover:border-accent hover:text-accent disabled:opacity-30"
+            className="text-[0.7rem] px-1.5 py-1 rounded border border-paper-line text-ink-muted hover:border-accent hover:text-accent disabled:opacity-30"
           >
             +
           </button>
         </form>
       </nav>
-      <div className="px-4 py-3 border-t border-paper-line text-[11px] font-mono text-ink-dim space-y-2">
+      <div className="px-4 py-3 border-t border-paper-line text-[0.76rem] font-mono text-ink-dim space-y-2">
         {account?.address && (
           <div className="space-y-0.5">
             <div className="text-ink-muted truncate" title={account.address}>
@@ -98,10 +98,11 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
           poche {status?.poche_ok ? "ok" : "down"}
         </div>
         <StorageBar token={token} />
+        <ThemeToggle />
         {onLogout && (
           <button
             onClick={onLogout}
-            className="mt-1 text-ink-dim hover:text-accent text-[11px] underline"
+            className="mt-1 text-ink-dim hover:text-accent text-[0.76rem] underline"
           >
             Sign out
           </button>
@@ -270,7 +271,7 @@ function MessageList({
                 <span className={"text-sm truncate " + (m.unread ? "font-semibold text-ink" : "text-ink-muted")}>
                   {m.direction === "out" ? "To " + (m.to_addr || "") : m.from_addr}
                 </span>
-                <span className="text-[11px] font-mono text-ink-dim shrink-0 tabular-nums">
+                <span className="text-[0.76rem] font-mono text-ink-dim shrink-0 tabular-nums">
                   {formatWhen(m.created_at)}
                 </span>
               </div>
@@ -304,7 +305,9 @@ function StorageBar({ token }) {
     return () => { active = false; clearInterval(interval); };
   }, [token]);
 
-  if (loading || !usage) return null;
+  // Admin tokens have no mailbox, so the endpoint answers with a per-mailbox
+  // breakdown instead of a single figure — nothing to show in a per-user bar.
+  if (loading || !usage || usage.mailboxes || typeof usage.used_bytes !== "number") return null;
 
   const fmt = (b) => {
     if (b >= 1073741824) return (b / 1073741824).toFixed(1) + " GB";
@@ -319,7 +322,7 @@ function StorageBar({ token }) {
 
   return (
     <div className="space-y-1">
-      <div className="flex justify-between text-[10px] text-ink-dim">
+      <div className="flex justify-between text-[0.7rem] text-ink-dim">
         <span>Storage</span>
         <span className="tabular-nums">{fmt(usage.used_bytes)} / {fmt(usage.max_bytes)}</span>
       </div>
@@ -329,10 +332,25 @@ function StorageBar({ token }) {
           style={{ width: barWidth + "%" }}
         />
       </div>
-      <div className="text-[10px] text-ink-dim tabular-nums">
+      <div className="text-[0.7rem] text-ink-dim tabular-nums">
         {pct}% · {usage.message_count} msgs
       </div>
     </div>
   );
 }
 
+
+function ThemeToggle() {
+  const [theme, toggle] = useTheme();
+  const light = theme === "light";
+  return (
+    <button
+      onClick={toggle}
+      title={light ? "Switch to dark theme" : "Switch to light theme"}
+      className="mt-2 w-full flex items-center justify-between px-2 py-1.5 rounded border border-paper-line text-[0.76rem] text-ink-muted hover:border-accent hover:text-accent"
+    >
+      <span>{light ? "Light" : "Dark"} theme</span>
+      <span aria-hidden="true">{light ? "☀" : "☾"}</span>
+    </button>
+  );
+}

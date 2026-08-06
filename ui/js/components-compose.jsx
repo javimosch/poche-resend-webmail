@@ -68,7 +68,7 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy }) {
 
         <div className="px-5 py-4 space-y-3 overflow-y-auto scrollbar-thin">
           <label className="block">
-            <span className="text-[10px] uppercase tracking-wider text-ink-dim">From</span>
+            <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">From</span>
             {(addresses || []).length > 1 ? (
               <select value={from} onChange={(e) => setFrom(e.target.value)} className={field}>
                 {(addresses || []).map((a) => (
@@ -83,7 +83,7 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy }) {
           </label>
 
           <label className="block">
-            <span className="text-[10px] uppercase tracking-wider text-ink-dim">To</span>
+            <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">To</span>
             <input
               value={to}
               onChange={(e) => setTo(e.target.value)}
@@ -96,11 +96,11 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy }) {
           {showCc ? (
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-ink-dim">Cc</span>
+                <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">Cc</span>
                 <input value={cc} onChange={(e) => setCc(e.target.value)} className={field} />
               </label>
               <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-ink-dim">Bcc</span>
+                <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">Bcc</span>
                 <input value={bcc} onChange={(e) => setBcc(e.target.value)} className={field} />
               </label>
             </div>
@@ -111,7 +111,7 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy }) {
           )}
 
           <label className="block">
-            <span className="text-[10px] uppercase tracking-wider text-ink-dim">Subject</span>
+            <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">Subject</span>
             <input value={subject} onChange={(e) => setSubject(e.target.value)} className={field} />
           </label>
 

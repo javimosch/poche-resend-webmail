@@ -24,7 +24,12 @@ function MessagePane({
       </div>
     );
   }
-  const html = decodeBodyHtml(msg.body_html) || "<pre>" + (msg.body_text || "") + "</pre>";
+  const rawHtml = decodeBodyHtml(msg.body_html);
+  const html = rawHtml || "<pre>" + (msg.body_text || "") + "</pre>";
+  // Senders style HTML mail for a white page. On the dark theme that means
+  // dark text on a dark background, so real HTML mail gets its own light
+  // surface; plain text keeps following the UI theme.
+  const bodyClass = rawHtml ? " prose-mail--html" : "";
   const btn =
     "text-xs px-2.5 py-1 rounded border border-paper-line text-ink-muted hover:border-accent hover:text-accent";
   const chips = (msgTags || []).filter((t) => t !== "archive");
@@ -48,7 +53,7 @@ function MessagePane({
             {chips.map((t) => (
               <span
                 key={t}
-                className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-paper-line text-ink-dim"
+                className="text-[0.7rem] uppercase tracking-wide px-1.5 py-0.5 rounded border border-paper-line text-ink-dim"
               >
                 #{t}
               </span>
@@ -97,7 +102,7 @@ function MessagePane({
         </div>
       </header>
       <div
-        className="flex-1 overflow-y-auto scrollbar-thin px-6 py-5 prose-mail text-ink-muted leading-relaxed"
+        className={"flex-1 overflow-y-auto scrollbar-thin px-6 py-5 prose-mail text-ink-muted leading-relaxed" + bodyClass}
         dangerouslySetInnerHTML={{ __html: html }}
       />
       {msg.direction !== "out" && (
