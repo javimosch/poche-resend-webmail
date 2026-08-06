@@ -71,23 +71,42 @@ function MessagePane({
           </div>
         )}
         {(attachments || []).length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {attachments.map((a) => (
-              <a
-                key={a.id}
-                href={
-                  "/api/attachments/" +
-                  encodeURIComponent(a.id) +
-                  "/open?token=" +
-                  encodeURIComponent(token || "")
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-accent underline"
-              >
-                {a.filename || t("attachment")}
-              </a>
-            ))}
+          <div className="mt-2 flex flex-wrap gap-2 items-center">
+            <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">
+              {t("attachments")}
+            </span>
+            {attachments.map((a) => {
+              const size = a.bytes ? " (" + fmtBytes(a.bytes) + ")" : "";
+              // Outbound copies keep the name and size but not the bytes, so
+              // there is deliberately nothing to link to.
+              if (a.stored === false || !a.download_url) {
+                return (
+                  <span
+                    key={a.id}
+                    title={t("not_stored_title")}
+                    className="text-xs text-ink-dim border border-paper-line rounded px-1.5 py-0.5"
+                  >
+                    {(a.filename || t("attachment")) + size} · {t("not_stored")}
+                  </span>
+                );
+              }
+              return (
+                <a
+                  key={a.id}
+                  href={
+                    "/api/attachments/" +
+                    encodeURIComponent(a.id) +
+                    "/open?token=" +
+                    encodeURIComponent(token || "")
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-accent underline"
+                >
+                  {(a.filename || t("attachment")) + size}
+                </a>
+              );
+            })}
           </div>
         )}
         <div className="mt-3 flex flex-wrap gap-1.5">

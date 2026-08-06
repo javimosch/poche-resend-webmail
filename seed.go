@@ -127,7 +127,7 @@ func ensureSchema(p *Poche) error {
 		return fmt.Errorf("message_tags: %w", err)
 	}
 	if err := p.AdminSchema("attachments",
-		"message_id:string!required!ref=messages,filename:string,content_type:string,resend_attach_id:string,download_url:string,file_id:string"); err != nil {
+		"message_id:string!required!ref=messages,filename:string,content_type:string,resend_attach_id:string,download_url:string,file_id:string,bytes:int,stored:bool"); err != nil {
 		return fmt.Errorf("attachments: %w", err)
 	}
 	_ = p.AdminIndex("messages", "created_at", "range")

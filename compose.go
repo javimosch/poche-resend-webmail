@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -21,6 +24,8 @@ type composeReq struct {
 	// "text" (default), "html", or "markdown" — markdown is converted and
 	// sanitized server-side so every caller gets the same output.
 	Format string `json:"format"`
+	// Bytes are forwarded to Resend and never persisted; see below.
+	Attachments []composeAttachment `json:"attachments"`
 }
 
 func handleComposeAPI(w http.ResponseWriter, r *http.Request) {
@@ -28,9 +33,13 @@ func handleComposeAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 405, map[string]any{"ok": false, "error": "POST only"})
 		return
 	}
+	// base64 inflates by ~4/3, plus JSON overhead — cap the request rather than
+	// letting an oversized upload buffer into memory before validation runs.
+	_, totalCap, _ := attachmentLimits()
+	r.Body = http.MaxBytesReader(w, r.Body, totalCap*2+1<<20)
 	var req composeReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad json"})
+		writeJSON(w, 413, map[string]any{"ok": false, "error": "request too large or malformed"})
 		return
 	}
 	data, err := composeMessage(authMailboxID(r), authIsAdmin(r), req)
@@ -144,6 +153,14 @@ func composeMessage(mbID string, isAdmin bool, req composeReq) (map[string]any, 
 		payload["bcc"] = bcc
 	}
 
+	files, fileMeta, err := prepareAttachments(req.Attachments)
+	if err != nil {
+		return nil, err
+	}
+	if len(files) > 0 {
+		payload["attachments"] = files
+	}
+
 	re := resendForMailbox(mb)
 	sent, err := re.sendEmail(payload)
 	if err != nil {
@@ -174,7 +191,15 @@ func composeMessage(mbID string, isAdmin bool, req composeReq) (map[string]any, 
 		"references":     "",
 		"created_at":     time.Now().UnixMilli(),
 	}
-	if _, err := p.Create("messages", outDoc); err != nil {
+	stored, err := p.Create("messages", outDoc)
+	if err == nil && len(fileMeta) > 0 {
+		var wrap map[string]any
+		_ = json.Unmarshal(stored, &wrap)
+		if id, _ := wrap["_id"].(string); id != "" {
+			recordSentAttachments(p, id, fileMeta)
+		}
+	}
+	if err != nil {
 		// The mail is already out the door — report the send as successful but
 		// surface the storage failure so the Sent copy isn't silently missing.
 		fmt.Fprintf(os.Stderr, "{\"event\":\"compose_store_err\",\"resend_id\":%q,\"err\":%q}\n", sentID, err.Error())
@@ -187,14 +212,15 @@ func composeMessage(mbID string, isAdmin bool, req composeReq) (map[string]any, 
 		updateMailboxUsage(p, mbID, 1, messageSizeBytes(outDoc))
 	}
 	return map[string]any{
-		"sent_id": sentID,
-		"from":    from,
-		"to":      to,
-		"cc":      cc,
-		"subject": subject,
-		"format":  normalizeFormat(req.Format),
-		"html":    htmlPart != "",
-		"stored":  true,
+		"sent_id":     sentID,
+		"from":        from,
+		"to":          to,
+		"cc":          cc,
+		"subject":     subject,
+		"format":      normalizeFormat(req.Format),
+		"html":        htmlPart != "",
+		"attachments": len(files),
+		"stored":      true,
 	}, nil
 }
 
@@ -284,12 +310,30 @@ func handleComposeCmd() {
 	subject := fs.String("subject", "", "subject")
 	text := fs.String("text", "", "body text")
 	format := fs.String("format", "text", "body format: text|html|markdown")
+	attach := fs.String("attach", "", "comma-separated file paths to attach (streamed to Resend, not stored)")
 	_ = fs.Parse(os.Args[2:])
 	if *to == "" || *subject == "" || *text == "" {
 		fail(80, "input", "usage: send --to a@b.fr --subject S --text T [--from x] [--cc] [--bcc]", "")
 	}
+	var atts []composeAttachment
+	for _, path := range splitCSV(*attach) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			fail(80, "input", "--attach: "+err.Error(), "")
+		}
+		atts = append(atts, composeAttachment{
+			Filename:    filepath.Base(path),
+			ContentType: mime.TypeByExtension(filepath.Ext(path)),
+			Content:     base64.StdEncoding.EncodeToString(raw),
+		})
+	}
 	data, err := composeMessage("", true, composeReq{
 		From: *from, To: *to, Cc: *cc, Bcc: *bcc, Subject: *subject, Text: *text, Format: *format,
+		Attachments: atts,
 	})
 	if err != nil {
 		fail(100, "integration", err.Error(), "set RESEND_API_KEY, POCHE_TOKEN and MAIL_FROM_ALLOWLIST")
@@ -323,4 +367,125 @@ func handleRenderAPI(w http.ResponseWriter, r *http.Request) {
 		"html":   html,
 		"text":   text,
 	}})
+}
+
+// ─── attachments (send-only) ────────────────────────────────────────────
+//
+// Attachment bytes are streamed straight through to Resend and never stored:
+// poche keeps documents in memory (6 MB of blobs took the store from 4 MB to
+// 315 MB RSS) and dk1 has little disk to spare. The Sent copy therefore keeps
+// the file names and sizes, but not the contents.
+
+type composeAttachment struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Content     string `json:"content"` // base64, as Resend expects
+}
+
+func attachmentLimits() (perFile int64, total int64, count int) {
+	return envInt64("ATTACHMENT_MAX_BYTES", 10*1024*1024),
+		envInt64("ATTACHMENTS_MAX_TOTAL_BYTES", 20*1024*1024),
+		envInt("ATTACHMENTS_MAX_COUNT", 10)
+}
+
+// safeFilename strips any path and control characters a sender could use to
+// escape a download directory or spoof an extension.
+func safeFilename(name string) string {
+	name = strings.TrimSpace(name)
+	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+		name = name[i+1:]
+	}
+	name = strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 {
+			return -1
+		}
+		return r
+	}, name)
+	name = strings.TrimLeft(name, ".")
+	if name == "" {
+		name = "attachment"
+	}
+	if len(name) > 200 {
+		name = name[:200]
+	}
+	return name
+}
+
+// prepareAttachments validates the payload and returns the Resend-shaped list
+// plus a metadata summary to store on the sent message.
+func prepareAttachments(in []composeAttachment) ([]map[string]any, []map[string]any, error) {
+	perFile, totalCap, maxCount := attachmentLimits()
+	if len(in) == 0 {
+		return nil, nil, nil
+	}
+	if len(in) > maxCount {
+		return nil, nil, fmt.Errorf("too many attachments: %d (max %d)", len(in), maxCount)
+	}
+	out := make([]map[string]any, 0, len(in))
+	meta := make([]map[string]any, 0, len(in))
+	var running int64
+	for _, a := range in {
+		name := safeFilename(a.Filename)
+		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(a.Content))
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: content must be base64", name)
+		}
+		size := int64(len(raw))
+		if size == 0 {
+			return nil, nil, fmt.Errorf("%s: empty file", name)
+		}
+		if size > perFile {
+			return nil, nil, fmt.Errorf("%s is %s, over the %s per-file limit", name, humanBytes(size), humanBytes(perFile))
+		}
+		running += size
+		if running > totalCap {
+			return nil, nil, fmt.Errorf("attachments total %s, over the %s limit", humanBytes(running), humanBytes(totalCap))
+		}
+		att := map[string]any{
+			"filename": name,
+			"content":  base64.StdEncoding.EncodeToString(raw),
+		}
+		if ct := strings.TrimSpace(a.ContentType); ct != "" {
+			att["content_type"] = ct
+		}
+		out = append(out, att)
+		meta = append(meta, map[string]any{
+			"filename":     name,
+			"content_type": a.ContentType,
+			"bytes":        size,
+		})
+	}
+	return out, meta, nil
+}
+
+func humanBytes(b int64) string {
+	switch {
+	case b >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(b)/(1<<20))
+	case b >= 1<<10:
+		return fmt.Sprintf("%.0f KB", float64(b)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", b)
+	}
+}
+
+// recordSentAttachments stores names and sizes so the Sent copy shows what
+// went out. There is no download_url: the bytes were never kept, and the UI
+// says so rather than offering a link that cannot work.
+func recordSentAttachments(p *Poche, messageID string, meta []map[string]any) {
+	for _, m := range meta {
+		doc := map[string]any{
+			"message_id":       messageID,
+			"filename":         strField(m, "filename"),
+			"content_type":     strField(m, "content_type"),
+			"resend_attach_id": "",
+			"download_url":     "",
+			"file_id":          "",
+			"bytes":            m["bytes"],
+			"stored":           false,
+		}
+		if _, err := p.Create("attachments", doc); err != nil {
+			fmt.Fprintf(os.Stderr, "{\"event\":\"sent_attachment_meta_err\",\"err\":%q}\n", err.Error())
+		}
+	}
 }

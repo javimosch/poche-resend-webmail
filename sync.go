@@ -254,6 +254,8 @@ func upsertAttachments(p *Poche, messageID string, doc map[string]any) error {
 			"resend_attach_id": aid,
 			"download_url":     strField(m, "download_url"),
 			"file_id":          "",
+			"bytes":            m["size"],
+			"stored":           strField(m, "download_url") != "",
 		})
 	}
 	return nil

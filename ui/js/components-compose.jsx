@@ -12,6 +12,8 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
   const [format, setFormat] = React.useState("text");
   const [preview, setPreview] = React.useState(false);
   const [previewHtml, setPreviewHtml] = React.useState("");
+  const [files, setFiles] = React.useState([]);
+  const fileInput = React.useRef(null);
   const [error, setError] = React.useState("");
   const [sent, setSent] = React.useState("");
 
@@ -37,7 +39,37 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
     setSubject("");
     setText("");
     setPreview(false);
+    setFiles([]);
+    if (fileInput.current) fileInput.current.value = "";
   };
+
+  const addFiles = (list) => {
+    const chosen = Array.from(list || []);
+    if (!chosen.length) return;
+    setError("");
+    Promise.all(
+      chosen.map(
+        (f) =>
+          new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () =>
+              resolve({
+                filename: f.name,
+                content_type: f.type || "application/octet-stream",
+                bytes: f.size,
+                // strip the "data:...;base64," prefix the reader adds
+                content: String(r.result).split(",", 2)[1] || "",
+              });
+            r.onerror = () => reject(new Error(f.name));
+            r.readAsDataURL(f);
+          })
+      )
+    )
+      .then((read) => setFiles((prev) => prev.concat(read)))
+      .catch((err) => setError(String(err.message || err)));
+  };
+
+  const totalBytes = files.reduce((n, f) => n + (f.bytes || 0), 0);
 
   const submit = (e) => {
     e.preventDefault();
@@ -47,7 +79,20 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
     if (!to.trim()) return setError(t("err_recipient"));
     if (!subject.trim()) return setError(t("err_subject"));
     if (!text.trim()) return setError(t("err_body"));
-    onSend({ from, to: to.trim(), cc: cc.trim(), bcc: bcc.trim(), subject: subject.trim(), text, format })
+    onSend({
+      from,
+      to: to.trim(),
+      cc: cc.trim(),
+      bcc: bcc.trim(),
+      subject: subject.trim(),
+      text,
+      format,
+      attachments: files.map((f) => ({
+        filename: f.filename,
+        content_type: f.content_type,
+        content: f.content,
+      })),
+    })
       .then((res) => {
         setSent(t("sent_to", Array.isArray(res?.to) ? res.to.join(", ") : to.trim()));
         reset();
@@ -186,6 +231,50 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
               className={field + " resize-y font-mono text-[0.9rem]"}
             />
           )}
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button type="button" onClick={() => fileInput.current && fileInput.current.click()} className={btn}>
+                📎 {t("attach")}
+              </button>
+              {files.length > 0 && (
+                <span className="text-[0.7rem] text-ink-dim">
+                  {t("attach_total", files.length, fmtBytes(totalBytes))}
+                </span>
+              )}
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  addFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+            {files.length > 0 && (
+              <ul className="space-y-1">
+                {files.map((f, i) => (
+                  <li
+                    key={f.filename + i}
+                    className="flex items-center gap-2 text-[0.76rem] text-ink-muted border border-paper-line rounded px-2 py-1"
+                  >
+                    <span className="truncate flex-1" title={f.filename}>{f.filename}</span>
+                    <span className="text-ink-dim tabular-nums shrink-0">{fmtBytes(f.bytes)}</span>
+                    <button
+                      type="button"
+                      title={t("remove")}
+                      onClick={() => setFiles(files.filter((_, j) => j !== i))}
+                      className="text-ink-dim hover:text-accent shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           {error && <div className="text-sm text-red-400">{error}</div>}
           {sent && <div className="text-sm text-accent">{sent}</div>}

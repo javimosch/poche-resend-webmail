@@ -189,6 +189,30 @@ GET /api/mailbox/addresses
 `RESEND_BASE_URL` overrides the Resend API host (default
 `https://api.resend.com`) so sends can be pointed at a stub in tests.
 
+## Attachments — send only (v0.3.6+)
+
+Outgoing mail can carry files; **the bytes are never stored**. They go
+straight through to Resend, and the Sent copy keeps only names and sizes
+(`stored:false`, no `download_url`), which the UI shows as "contents not kept"
+instead of a link that cannot work. Inbound attachments are unchanged: they
+still redirect to Resend's URL, which expires eventually.
+
+Why not stored: poche holds documents in memory (6 MB of base64 blobs took the
+store from 4 MB to 315 MB RSS) and its `_files` blob store has a GET route but
+**no HTTP upload** — writes go through the CLI, which the running server does
+not see. dk1 also has ~2.4 GB free. Durable attachments need one of: an upload
+route added to poche, or a blob directory on the host with its own backups.
+
+```bash
+./poche-resend-webmail send --to a@b.fr --subject Devis --text "ci-joint" \
+  --attach ./devis.pdf,./photo.jpg
+```
+
+Caps (env): `ATTACHMENT_MAX_BYTES` 10 MB per file, `ATTACHMENTS_MAX_TOTAL_BYTES`
+20 MB, `ATTACHMENTS_MAX_COUNT` 10. The compose endpoint wraps its body in a
+`MaxBytesReader` so an oversized upload is refused before it buffers. File
+names are stripped of any path — `../../etc/passwd` is sent as `passwd`.
+
 ## Branding and layout (v0.3.5+)
 
 The sidebar name is per **mailbox** (`brand`), falling back to `BRAND_NAME`

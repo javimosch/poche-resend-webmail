@@ -159,6 +159,14 @@ function toggleStar(token, id) {
   });
 }
 
+function fmtBytes(b) {
+  if (!b && b !== 0) return "";
+  if (b >= 1073741824) return (b / 1073741824).toFixed(1) + " GB";
+  if (b >= 1048576) return (b / 1048576).toFixed(1) + " MB";
+  if (b >= 1024) return (b / 1024).toFixed(0) + " KB";
+  return b + " B";
+}
+
 function formatWhen(ms, locale) {
   if (!ms) return "";
   const d = new Date(typeof ms === "number" && ms < 1e12 ? ms * 1000 : ms);
