@@ -3,3 +3,4 @@ poche-resend-webmail
 *.data
 *.log
 /tmp/
+.webmail/
