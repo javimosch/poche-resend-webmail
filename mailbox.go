@@ -499,7 +499,17 @@ func updateMailboxUsage(p *Poche, mailboxID string, deltaCount int, deltaBytes i
 		fmt.Fprintf(os.Stderr, "{\"event\":\"usage_update_err\",\"mailbox\":%q,\"err\":%q}\n", mailboxID, err.Error())
 		return
 	}
-	mb := parseMailbox(mailboxID, raw)
+	// p.Get returns {"id":…,"doc":{…}} — parsing the envelope makes every
+	// counter read as 0, so each update overwrote the total with its own
+	// delta instead of adding to it.
+	var wrap struct {
+		Doc json.RawMessage `json:"doc"`
+	}
+	if err := json.Unmarshal(raw, &wrap); err != nil || len(wrap.Doc) == 0 {
+		fmt.Fprintf(os.Stderr, "{\"event\":\"usage_update_err\",\"mailbox\":%q,\"err\":\"unreadable doc\"}\n", mailboxID)
+		return
+	}
+	mb := parseMailbox(mailboxID, wrap.Doc)
 	newCount := mb.MessageCount + deltaCount
 	if newCount < 0 {
 		newCount = 0

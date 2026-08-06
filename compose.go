@@ -192,11 +192,14 @@ func composeMessage(mbID string, isAdmin bool, req composeReq) (map[string]any, 
 		"created_at":     time.Now().UnixMilli(),
 	}
 	stored, err := p.Create("messages", outDoc)
+	var attachmentBytes int64
 	if err == nil && len(fileMeta) > 0 {
 		var wrap map[string]any
 		_ = json.Unmarshal(stored, &wrap)
 		if id, _ := wrap["_id"].(string); id != "" {
-			recordSentAttachments(p, id, fileMeta)
+			attachmentBytes = recordSentAttachments(p, mbID, id, fileMeta)
+			fmt.Fprintf(os.Stderr, "{\"event\":\"attachments_stored\",\"files\":%d,\"bytes\":%d,\"mailbox\":%q}\n",
+				len(fileMeta), attachmentBytes, mbID)
 		}
 	}
 	if err != nil {
@@ -209,7 +212,10 @@ func composeMessage(mbID string, isAdmin bool, req composeReq) (map[string]any, 
 		}, nil
 	}
 	if mbID != "" {
-		updateMailboxUsage(p, mbID, 1, messageSizeBytes(outDoc))
+		// One write, not two: poche's read-after-write is not immediate, so a
+		// second update moments later reads a stale counter and clobbers the
+		// first. Attachments count against the quota like message bodies.
+		updateMailboxUsage(p, mbID, 1, messageSizeBytes(outDoc)+attachmentBytes)
 	}
 	return map[string]any{
 		"sent_id":     sentID,
@@ -376,6 +382,13 @@ func handleRenderAPI(w http.ResponseWriter, r *http.Request) {
 // 315 MB RSS) and dk1 has little disk to spare. The Sent copy therefore keeps
 // the file names and sizes, but not the contents.
 
+// storedAttachment carries the decoded bytes so the Sent copy can keep them.
+type storedAttachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
+
 type composeAttachment struct {
 	Filename    string `json:"filename"`
 	ContentType string `json:"content_type"`
@@ -413,7 +426,7 @@ func safeFilename(name string) string {
 
 // prepareAttachments validates the payload and returns the Resend-shaped list
 // plus a metadata summary to store on the sent message.
-func prepareAttachments(in []composeAttachment) ([]map[string]any, []map[string]any, error) {
+func prepareAttachments(in []composeAttachment) ([]map[string]any, []storedAttachment, error) {
 	perFile, totalCap, maxCount := attachmentLimits()
 	if len(in) == 0 {
 		return nil, nil, nil
@@ -422,7 +435,7 @@ func prepareAttachments(in []composeAttachment) ([]map[string]any, []map[string]
 		return nil, nil, fmt.Errorf("too many attachments: %d (max %d)", len(in), maxCount)
 	}
 	out := make([]map[string]any, 0, len(in))
-	meta := make([]map[string]any, 0, len(in))
+	meta := make([]storedAttachment, 0, len(in))
 	var running int64
 	for _, a := range in {
 		name := safeFilename(a.Filename)
@@ -449,11 +462,7 @@ func prepareAttachments(in []composeAttachment) ([]map[string]any, []map[string]
 			att["content_type"] = ct
 		}
 		out = append(out, att)
-		meta = append(meta, map[string]any{
-			"filename":     name,
-			"content_type": a.ContentType,
-			"bytes":        size,
-		})
+		meta = append(meta, storedAttachment{Filename: name, ContentType: a.ContentType, Data: raw})
 	}
 	return out, meta, nil
 }
@@ -469,23 +478,37 @@ func humanBytes(b int64) string {
 	}
 }
 
-// recordSentAttachments stores names and sizes so the Sent copy shows what
-// went out. There is no download_url: the bytes were never kept, and the UI
-// says so rather than offering a link that cannot work.
-func recordSentAttachments(p *Poche, messageID string, meta []map[string]any) {
-	for _, m := range meta {
+// recordSentAttachments keeps the bytes so a sent message can be re-opened.
+// Storage failures are logged and recorded as stored:false rather than failing
+// the send — the mail is already delivered by this point.
+func recordSentAttachments(p *Poche, mailboxID, messageID string, atts []storedAttachment) int64 {
+	var kept int64
+	for _, a := range atts {
+		blobID, err := putBlob(a.Data)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "{\"event\":\"attachment_store_err\",\"file\":%q,\"err\":%q}\n", a.Filename, err.Error())
+			blobID = ""
+		}
 		doc := map[string]any{
 			"message_id":       messageID,
-			"filename":         strField(m, "filename"),
-			"content_type":     strField(m, "content_type"),
+			"filename":         a.Filename,
+			"content_type":     a.ContentType,
 			"resend_attach_id": "",
 			"download_url":     "",
-			"file_id":          "",
-			"bytes":            m["bytes"],
-			"stored":           false,
+			"file_id":          blobID,
+			"bytes":            len(a.Data),
+			"stored":           blobID != "",
 		}
 		if _, err := p.Create("attachments", doc); err != nil {
 			fmt.Fprintf(os.Stderr, "{\"event\":\"sent_attachment_meta_err\",\"err\":%q}\n", err.Error())
+			if blobID != "" {
+				deleteBlob(blobID) // no row to find it by — do not orphan it
+			}
+			continue
+		}
+		if blobID != "" {
+			kept += int64(len(a.Data))
 		}
 	}
+	return kept
 }

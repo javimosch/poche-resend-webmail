@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 )
 
 func handleMessagesAPI(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +116,7 @@ func handleAttachmentOpen(w http.ResponseWriter, r *http.Request) {
 	p := newPocheFromEnv()
 	raw, err := p.Get("attachments", id)
 	if err != nil {
-		writeJSON(w, 404, map[string]any{"ok": false, "error": err.Error()})
+		writeJSON(w, 404, map[string]any{"ok": false, "error": "not found"})
 		return
 	}
 	var wrap struct {
@@ -122,12 +125,66 @@ func handleAttachmentOpen(w http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(raw, &wrap)
 	doc := map[string]any{}
 	_ = json.Unmarshal(wrap.Doc, &doc)
-	url, _ := doc["download_url"].(string)
-	if url == "" {
-		writeJSON(w, 404, map[string]any{"ok": false, "error": "no download_url"})
+
+	// An attachment id alone must not grant access: without this any signed-in
+	// tenant could read another tenant's files by guessing or replaying an id.
+	if !authIsAdmin(r) {
+		mbID := authMailboxID(r)
+		msgID, _ := doc["message_id"].(string)
+		if mbID == "" || msgID == "" {
+			writeJSON(w, 403, map[string]any{"ok": false, "error": "forbidden"})
+			return
+		}
+		msg, err := loadDoc(p, msgID)
+		if err != nil {
+			writeJSON(w, 404, map[string]any{"ok": false, "error": "not found"})
+			return
+		}
+		if owner, _ := msg["mailbox_id"].(string); owner != mbID {
+			writeJSON(w, 403, map[string]any{"ok": false, "error": "forbidden"})
+			return
+		}
+	}
+
+	filename := strField(doc, "filename")
+	if filename == "" {
+		filename = "attachment"
+	}
+
+	// Stored locally (outbound copies): serve the bytes ourselves.
+	if fileID := strField(doc, "file_id"); fileID != "" {
+		if path, ok := blobPath(fileID); ok {
+			f, err := os.Open(path)
+			if err != nil {
+				writeJSON(w, 404, map[string]any{"ok": false, "error": "blob missing"})
+				return
+			}
+			defer f.Close()
+			st, _ := f.Stat()
+			ct := strField(doc, "content_type")
+			if ct == "" {
+				ct = "application/octet-stream"
+			}
+			// Always as a download, never rendered: an HTML or SVG attachment
+			// served inline would execute in the mailbox's own origin.
+			w.Header().Set("Content-Type", ct)
+			w.Header().Set("Content-Disposition", "attachment; filename=\""+safeFilename(filename)+"\"")
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+			if st != nil {
+				w.Header().Set("Content-Length", fmt.Sprintf("%d", st.Size()))
+			}
+			http.ServeContent(w, r, filename, time.Time{}, f)
+			return
+		}
+	}
+
+	// Inbound attachments still live at Resend until a fetch-on-ingest exists.
+	if url := strField(doc, "download_url"); url != "" {
+		http.Redirect(w, r, url, http.StatusFound)
 		return
 	}
-	http.Redirect(w, r, url, http.StatusFound)
+	writeJSON(w, 404, map[string]any{"ok": false, "error": "no content stored for this attachment"})
 }
 
 func atoiDef(s string, def int) int {

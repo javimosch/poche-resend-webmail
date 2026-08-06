@@ -231,7 +231,17 @@ func mailboxUsage(p *Poche, mailboxID string) (count int, bytes int64, err error
 	if err != nil {
 		return 0, 0, err
 	}
-	mb := parseMailbox(mailboxID, raw)
+	// Same envelope trap as updateMailboxUsage: parsing {"id":…,"doc":{…}}
+	// directly means the counter keys are never found, so the fast path never
+	// hit and every call recalculated from message bodies — and persisted it,
+	// erasing attachment bytes.
+	var wrap struct {
+		Doc json.RawMessage `json:"doc"`
+	}
+	if err := json.Unmarshal(raw, &wrap); err != nil || len(wrap.Doc) == 0 {
+		return 0, 0, fmt.Errorf("unreadable mailbox doc")
+	}
+	mb := parseMailbox(mailboxID, wrap.Doc)
 	// Fast path: counters are maintained on the mailbox doc. If the keys are
 	// present, return them. This avoids loading every message body into memory.
 	if _, hasCount := mb.Doc["message_count"]; hasCount {
@@ -245,6 +255,7 @@ func mailboxUsage(p *Poche, mailboxID string) (count int, bytes int64, err error
 	if err != nil {
 		return 0, 0, err
 	}
+	bytes += mailboxAttachmentBytes(p, mailboxID)
 	doc := mb.Doc
 	doc["message_count"] = count
 	doc["used_bytes"] = bytes
@@ -327,4 +338,37 @@ func findOrCreateMailboxForAddress(p *Poche, addr string) (string, error) {
 		return "", nil
 	}
 	return mb.ID, nil
+}
+
+// mailboxAttachmentBytes totals the stored attachment bytes for a mailbox, so
+// a recalculated usage figure matches what the quota should actually count.
+func mailboxAttachmentBytes(p *Poche, mailboxID string) int64 {
+	msgs, _, _, err := loadMailboxMessages(p, mailboxID)
+	if err != nil {
+		return 0
+	}
+	var total int64
+	for _, m := range msgs {
+		data, err := p.List("attachments", "message_id="+m.id, 100, 0, "", false)
+		if err != nil {
+			continue
+		}
+		var page struct {
+			Items []struct {
+				Doc struct {
+					Bytes  int64 `json:"bytes"`
+					Stored bool  `json:"stored"`
+				} `json:"doc"`
+			} `json:"items"`
+		}
+		if json.Unmarshal(data, &page) != nil {
+			continue
+		}
+		for _, it := range page.Items {
+			if it.Doc.Stored {
+				total += it.Doc.Bytes
+			}
+		}
+	}
+	return total
 }

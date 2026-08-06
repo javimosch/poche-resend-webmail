@@ -15,8 +15,8 @@ const (
 )
 
 type cleanupResult struct {
-	Deleted    int                `json:"deleted"`
-	ByMailbox []mailboxCleanup  `json:"by_mailbox"`
+	Deleted   int              `json:"deleted"`
+	ByMailbox []mailboxCleanup `json:"by_mailbox"`
 }
 
 type mailboxCleanup struct {
@@ -183,14 +183,18 @@ func deleteMessageWithLinks(p *Poche, messageID string) error {
 	// counters by the exact byte delta.
 	var mailboxID string
 	var deltaBytes int64
-	if raw, err := p.Get("messages", messageID); err == nil {
-		doc := map[string]any{}
-		_ = json.Unmarshal(raw, &doc)
+	// p.Get returns {"id":…,"doc":{…}} — reading mailbox_id off the wrapper
+	// yielded "", so deletes silently skipped the usage update and the quota
+	// never went back down.
+	if doc, err := loadDoc(p, messageID); err == nil {
 		if s, ok := doc["mailbox_id"].(string); ok {
 			mailboxID = s
 		}
 		deltaBytes = messageSizeBytes(doc)
 	}
+	// Drop stored attachment bytes before the rows that point at them,
+	// otherwise the blobs are orphaned and nothing will ever reclaim them.
+	freedBlobs := deleteMessageBlobs(p, messageID)
 	for _, coll := range []string{"message_tags", "attachments"} {
 		if err := deleteByMessageID(p, coll, messageID); err != nil {
 			logCleanupEvent("link_delete_err", map[string]any{"collection": coll, "message_id": messageID, "err": err.Error()})
@@ -200,7 +204,7 @@ func deleteMessageWithLinks(p *Poche, messageID string) error {
 		return err
 	}
 	if mailboxID != "" {
-		updateMailboxUsage(p, mailboxID, -1, -deltaBytes)
+		updateMailboxUsage(p, mailboxID, -1, -(deltaBytes + freedBlobs))
 	}
 	return nil
 }
@@ -333,4 +337,33 @@ func envInt64(k string, def int64) int64 {
 		return def
 	}
 	return v
+}
+
+// deleteMessageBlobs removes the on-disk bytes for a message's attachments and
+// returns how many bytes were reclaimed.
+func deleteMessageBlobs(p *Poche, messageID string) int64 {
+	data, err := p.List("attachments", "message_id="+messageID, 100, 0, "", false)
+	if err != nil {
+		return 0
+	}
+	var page struct {
+		Items []struct {
+			Doc struct {
+				FileID string `json:"file_id"`
+				Bytes  int64  `json:"bytes"`
+			} `json:"doc"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(data, &page); err != nil {
+		return 0
+	}
+	var freed int64
+	for _, it := range page.Items {
+		if it.Doc.FileID == "" {
+			continue
+		}
+		deleteBlob(it.Doc.FileID)
+		freed += it.Doc.Bytes
+	}
+	return freed
 }

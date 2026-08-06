@@ -189,19 +189,26 @@ GET /api/mailbox/addresses
 `RESEND_BASE_URL` overrides the Resend API host (default
 `https://api.resend.com`) so sends can be pointed at a stub in tests.
 
-## Attachments — send only (v0.3.6+)
+## Attachments (v0.3.6+)
 
-Outgoing mail can carry files; **the bytes are never stored**. They go
-straight through to Resend, and the Sent copy keeps only names and sizes
-(`stored:false`, no `download_url`), which the UI shows as "contents not kept"
-instead of a link that cannot work. Inbound attachments are unchanged: they
-still redirect to Resend's URL, which expires eventually.
+Outgoing mail can carry files, and the Sent copy keeps them: bytes go to
+Resend **and** to a blob directory on the host (`BLOB_DIR`, default
+`/var/lib/poche-resend-webmail/blobs`), with metadata in poche. Inbound
+attachments still redirect to Resend's URL, which expires eventually.
 
-Why not stored: poche holds documents in memory (6 MB of base64 blobs took the
-store from 4 MB to 315 MB RSS) and its `_files` blob store has a GET route but
-**no HTTP upload** — writes go through the CLI, which the running server does
-not see. dk1 also has ~2.4 GB free. Durable attachments need one of: an upload
-route added to poche, or a blob directory on the host with its own backups.
+Bytes are not in poche because poche holds documents in memory — 6 MB of
+base64 took the store from 4 MB to 315 MB RSS — and its `_files` store has a
+GET route but **no HTTP upload**. So the mail model stays in poche and only
+opaque bytes live on disk.
+
+**Back up `BLOB_DIR` with `poche.data`.** A poche-only backup restores
+messages whose attachments have vanished.
+
+Serving is deliberately hostile to the browser: `Content-Disposition:
+attachment`, `nosniff`, and a sandbox CSP, so an HTML or SVG attachment cannot
+execute in the mailbox origin. Access is scoped to the owning mailbox — an
+attachment id alone is not a capability. Deleting a message removes its blobs
+and returns the bytes to the quota.
 
 ```bash
 ./poche-resend-webmail send --to a@b.fr --subject Devis --text "ci-joint" \
@@ -209,7 +216,8 @@ route added to poche, or a blob directory on the host with its own backups.
 ```
 
 Caps (env): `ATTACHMENT_MAX_BYTES` 10 MB per file, `ATTACHMENTS_MAX_TOTAL_BYTES`
-20 MB, `ATTACHMENTS_MAX_COUNT` 10. The compose endpoint wraps its body in a
+20 MB, `ATTACHMENTS_MAX_COUNT` 10, and `BLOB_MIN_FREE_BYTES` (512 MB) below
+which storing is refused so a mailbox cannot fill the host. The compose endpoint wraps its body in a
 `MaxBytesReader` so an oversized upload is refused before it buffers. File
 names are stripped of any path — `../../etc/passwd` is sent as `passwd`.
 
@@ -310,6 +318,18 @@ Which key is used where:
 The webhook resolves the recipient before verifying, because the recipient
 decides whose signing secret applies. Nothing is written to the store until
 the signature passes.
+
+## Two poche traps that cost real debugging
+
+1. **`p.Get` returns `{"id":…,"doc":{…}}`.** Parsing that directly instead of
+   `.doc` makes every field read as empty — silently. It hit
+   `updateMailboxUsage` (counters never accumulated), `mailboxUsage` (fast path
+   never matched, so it recalculated from bodies and *persisted* that, erasing
+   attachment bytes) and `deleteMessageWithLinks` (mailbox_id empty, so quota
+   never went back down). Use `loadDoc` or unwrap explicitly.
+2. **Read-after-write is not immediate.** Two `updateMailboxUsage` calls moments
+   apart: the second read a stale counter and clobbered the first. Compute the
+   whole delta and write once.
 
 ## Credentials at rest (v0.3.2+)
 
