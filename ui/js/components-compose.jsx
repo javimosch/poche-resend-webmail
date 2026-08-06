@@ -1,4 +1,4 @@
-function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy }) {
+function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, token }) {
   const [from, setFrom] = React.useState(defaultFrom || "");
   const [to, setTo] = React.useState("");
   const [cc, setCc] = React.useState("");
@@ -6,6 +6,11 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy }) {
   const [showCc, setShowCc] = React.useState(false);
   const [subject, setSubject] = React.useState("");
   const [text, setText] = React.useState("");
+  // Plain stays the default: it is what most replies are, and it cannot be
+  // mangled by a converter.
+  const [format, setFormat] = React.useState("text");
+  const [preview, setPreview] = React.useState(false);
+  const [previewHtml, setPreviewHtml] = React.useState("");
   const [error, setError] = React.useState("");
   const [sent, setSent] = React.useState("");
 
@@ -30,6 +35,7 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy }) {
     setShowCc(false);
     setSubject("");
     setText("");
+    setPreview(false);
   };
 
   const submit = (e) => {
@@ -40,7 +46,7 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy }) {
     if (!to.trim()) return setError("Add at least one recipient.");
     if (!subject.trim()) return setError("Subject is required.");
     if (!text.trim()) return setError("Message body is required.");
-    onSend({ from, to: to.trim(), cc: cc.trim(), bcc: bcc.trim(), subject: subject.trim(), text })
+    onSend({ from, to: to.trim(), cc: cc.trim(), bcc: bcc.trim(), subject: subject.trim(), text, format })
       .then((res) => {
         setSent("Sent to " + (Array.isArray(res?.to) ? res.to.join(", ") : to.trim()));
         reset();
@@ -115,13 +121,70 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy }) {
             <input value={subject} onChange={(e) => setSubject(e.target.value)} className={field} />
           </label>
 
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={12}
-            placeholder="Write your message…"
-            className={field + " resize-y"}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-1">
+              {[
+                ["text", "Plain"],
+                ["markdown", "Markdown"],
+                ["html", "HTML"],
+              ].map(([value, name]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => { setFormat(value); setPreview(false); }}
+                  className={
+                    "text-[0.7rem] px-2 py-1 rounded border " +
+                    (format === value
+                      ? "border-accent text-accent bg-accent-soft"
+                      : "border-paper-line text-ink-dim hover:text-ink")
+                  }
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+            {format !== "text" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !preview;
+                  setPreview(next);
+                  if (next) {
+                    setPreviewHtml("");
+                    // Ask the server so the preview is the very same output that
+                    // would be sent, sanitizer included.
+                    renderBodyPreview(token, text, format)
+                      .then((d) => setPreviewHtml(d.html || "<p><em>(empty)</em></p>"))
+                      .catch((err) => setPreviewHtml("<p>Preview failed: " + String(err.message || err) + "</p>"));
+                  }
+                }}
+                className={btn}
+              >
+                {preview ? "Edit" : "Preview"}
+              </button>
+            )}
+          </div>
+
+          {preview && format !== "text" ? (
+            <div
+              className="min-h-[16rem] rounded border border-paper-line bg-paper px-4 py-3 prose-mail prose-mail--html overflow-y-auto"
+              dangerouslySetInnerHTML={{ __html: previewHtml || "<p>…</p>" }}
+            />
+          ) : (
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={14}
+              placeholder={
+                format === "markdown"
+                  ? "# Bonjour\n\nWrite **Markdown** — it is converted to HTML when sent."
+                  : format === "html"
+                    ? "<p>Write HTML — it is sanitized before sending.</p>"
+                    : "Write your message…"
+              }
+              className={field + " resize-y font-mono text-[0.9rem]"}
+            />
+          )}
 
           {error && <div className="text-sm text-red-400">{error}</div>}
           {sent && <div className="text-sm text-accent">{sent}</div>}
@@ -131,7 +194,14 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy }) {
           <button type="submit" disabled={busy} className={btn + " disabled:opacity-40"}>
             {busy ? "Sending…" : "Send"}
           </button>
-          <span className="text-xs text-ink-dim">Plain text · attachments not supported yet</span>
+          <span className="text-xs text-ink-dim">
+            {format === "markdown"
+              ? "Markdown → HTML on send"
+              : format === "html"
+                ? "HTML is sanitized before sending"
+                : "Plain text"}
+            {" · attachments not supported yet"}
+          </span>
         </footer>
       </form>
     </div>

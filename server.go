@@ -80,6 +80,7 @@ func startServer(port int) {
 	mux.HandleFunc("/api/message-tags", authed(handleMessageTagsAPI))
 	mux.HandleFunc("/api/reply", authed(handleReplyAPI))
 	mux.HandleFunc("/api/compose", authed(handleComposeAPI))
+	mux.HandleFunc("/api/render", authed(handleRenderAPI))
 	mux.HandleFunc("/api/mailbox/addresses", authed(handleMailboxAddressesAPI))
 	mux.HandleFunc("/api/cleanup", authed(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -157,7 +158,9 @@ func handleGuide() {
 		"login":       "POST /api/login {address, password} → {token, address, max_bytes} (address can be primary or alias)",
 		"forgot":      "POST /api/forgot-password {address} → sends reset link to recovery_email",
 		"reset":       "POST /api/reset-password {token, new_password} → sets new password, invalidates sessions",
-		"compose":     "POST /api/compose {from?, to, cc?, bcc?, subject, text} · new outbound mail, stored as direction=out",
+		"compose":     "POST /api/compose {from?, to, cc?, bcc?, subject, text, format?} · format text|html|markdown",
+		"render":      "POST /api/render {text, format} · preview exactly what compose would send (same converter + sanitizer)",
+		"tags":        "GET/POST /api/tags · PUT {name,new_name} renames everywhere · DELETE ?name=x removes the tag and its links",
 		"addresses":   "GET /api/mailbox/addresses · addresses the caller may send as (primary + aliases)",
 		"cli":         []string{"serve", "seed", "sync", "cleanup", "mailbox", "list", "read", "reply", "send", "guide"},
 	})

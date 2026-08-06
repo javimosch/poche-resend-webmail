@@ -1,4 +1,4 @@
-function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onLogout, token, account, onComposeClick }) {
+function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onRenameTag, onDeleteTag, onLogout, token, account, onComposeClick }) {
   const [newTag, setNewTag] = React.useState("");
   const [tagBusy, setTagBusy] = React.useState(false);
   const navBtn = (active, hasUnread) =>
@@ -54,18 +54,19 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
           {label("Archive", unread.archive || 0)}
         </button>
         <div className="px-3 pt-3 pb-1 text-[0.7rem] uppercase tracking-wider text-ink-dim">Tags</div>
-        {userTags.map((name) => {
-          const n = unread.tags?.[name] || 0;
-          return (
-            <button
-              key={name}
-              className={navBtn(view === "tag" && tagView === name, n > 0)}
-              onClick={() => setView("tag", name)}
-            >
-              {label("#" + name, n)}
-            </button>
-          );
-        })}
+        {userTags.map((name) => (
+          <TagRow
+            key={name}
+            name={name}
+            count={unread.tags?.[name] || 0}
+            active={view === "tag" && tagView === name}
+            navBtn={navBtn}
+            label={label}
+            onOpen={() => setView("tag", name)}
+            onRename={onRenameTag}
+            onDelete={onDeleteTag}
+          />
+        ))}
         <form onSubmit={submitTag} className="mt-2 px-1 flex gap-1">
           <input
             value={newTag}
@@ -85,9 +86,7 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
       <div className="px-4 py-3 border-t border-paper-line text-[0.76rem] font-mono text-ink-dim space-y-2">
         {account?.address && (
           <div className="space-y-0.5">
-            <div className="text-ink-muted truncate" title={account.address}>
-              {account.address}
-            </div>
+            <CopyAddress address={account.address} />
             {account.name && account.name !== account.address && (
               <div className="truncate" title={account.name}>{account.name}</div>
             )}
@@ -351,6 +350,66 @@ function ThemeToggle() {
     >
       <span>{light ? "Light" : "Dark"} theme</span>
       <span aria-hidden="true">{light ? "☀" : "☾"}</span>
+    </button>
+  );
+}
+
+function TagRow({ name, count, active, navBtn, label, onOpen, onRename, onDelete }) {
+  const [busy, setBusy] = React.useState(false);
+  const act =
+    "px-1 text-[0.7rem] text-ink-dim hover:text-accent disabled:opacity-30";
+
+  const rename = (e) => {
+    e.stopPropagation();
+    const next = window.prompt("Rename #" + name + " to:", name);
+    if (!next || next.trim() === name) return;
+    setBusy(true);
+    Promise.resolve(onRename(name, next.trim()))
+      .catch((err) => alert(String(err.message || err)))
+      .finally(() => setBusy(false));
+  };
+
+  const remove = (e) => {
+    e.stopPropagation();
+    if (!window.confirm("Delete #" + name + "? Messages keep their content, they just lose this tag.")) return;
+    setBusy(true);
+    Promise.resolve(onDelete(name))
+      .catch((err) => alert(String(err.message || err)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="group flex items-center gap-0.5">
+      <button className={navBtn(active, count > 0) + " flex-1 min-w-0 truncate"} onClick={onOpen}>
+        {label("#" + name, count)}
+      </button>
+      <span className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex shrink-0">
+        <button className={act} onClick={rename} disabled={busy} title={"Rename #" + name}>
+          ✎
+        </button>
+        <button className={act} onClick={remove} disabled={busy} title={"Delete #" + name}>
+          ✕
+        </button>
+      </span>
+    </div>
+  );
+}
+
+function CopyAddress({ address }) {
+  const [state, setState] = React.useState("");
+  const copy = () => {
+    copyToClipboard(address)
+      .then(() => setState("copied ✓"))
+      .catch(() => setState("copy blocked — select manually"))
+      .finally(() => setTimeout(() => setState(""), 1800));
+  };
+  return (
+    <button
+      onClick={copy}
+      title="Copy address to clipboard"
+      className={"w-full text-left truncate hover:text-accent " + (state ? "text-accent" : "text-ink-muted")}
+    >
+      {state || address}
     </button>
   );
 }

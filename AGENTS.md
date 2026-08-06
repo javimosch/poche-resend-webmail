@@ -179,6 +179,38 @@ GET /api/mailbox/addresses
 `RESEND_BASE_URL` overrides the Resend API host (default
 `https://api.resend.com`) so sends can be pointed at a stub in tests.
 
+## Compose formats (v0.3.3+)
+
+`POST /api/compose` takes `format`: `text` (default), `html`, or `markdown`.
+Markdown is converted server-side (goldmark, GFM) so the CLI and the UI get
+identical output, and **all outbound HTML is sanitized with the same policy as
+inbound** before it is sent or stored. HTML mail always ships a text/plain
+alternative — mail without one reads as spam to filters.
+
+`POST /api/render {text, format}` previews exactly what compose would send:
+same converter, same sanitizer. The UI preview uses it rather than rendering
+Markdown in the browser, which would be a second pipeline that could disagree
+with what actually goes out.
+
+```bash
+./poche-resend-webmail send --to a@b.fr --subject Devis \
+  --format markdown --text "# Bonjour\n\n**devis** [lien](https://x.fr)"
+```
+
+## Tags: rename and delete (v0.3.3+)
+
+```bash
+PUT    /api/tags {"name":"devis","new_name":"quotes"}  # moves every message link
+DELETE /api/tags?name=quotes                           # drops the tag + its links
+```
+
+`archive` is a system tag and is refused by both. Renaming is
+attach-new-then-drop-old because poche exposes `message_tags` for
+create+delete but **not update** — an `Update` there fails with
+"not exposed for update", and swallowing that error makes a rename look like
+it worked while silently losing labels. Deleting a tag needs `delete` exposure
+on the `tags` collection (added in `ensureSchema`).
+
 ## Per-mailbox Resend credentials (v0.3.1+)
 
 Each tenant can own a **separate Resend account** (its own verified domain,

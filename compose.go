@@ -18,6 +18,9 @@ type composeReq struct {
 	Bcc     any    `json:"bcc"`
 	Subject string `json:"subject"`
 	Text    string `json:"text"`
+	// "text" (default), "html", or "markdown" — markdown is converted and
+	// sanitized server-side so every caller gets the same output.
+	Format string `json:"format"`
 }
 
 func handleComposeAPI(w http.ResponseWriter, r *http.Request) {
@@ -118,11 +121,21 @@ func composeMessage(mbID string, isAdmin bool, req composeReq) (map[string]any, 
 		return nil, fmt.Errorf("from not allowed (set MAIL_FROM_ALLOWLIST): %s", from)
 	}
 
+	textPart, htmlPart, err := renderBody(req.Text, req.Format)
+	if err != nil {
+		return nil, fmt.Errorf("render %s body: %w", normalizeFormat(req.Format), err)
+	}
+	if strings.TrimSpace(stripTags(htmlPart)) == "" && strings.TrimSpace(textPart) == "" {
+		return nil, fmt.Errorf("body is empty after rendering")
+	}
 	payload := map[string]any{
 		"from":    from,
 		"to":      to,
 		"subject": subject,
-		"text":    req.Text,
+		"text":    textPart,
+	}
+	if htmlPart != "" {
+		payload["html"] = htmlPart
 	}
 	if len(cc) > 0 {
 		payload["cc"] = cc
@@ -140,25 +153,26 @@ func composeMessage(mbID string, isAdmin bool, req composeReq) (map[string]any, 
 
 	toLine := strings.Join(to, ", ")
 	outDoc := map[string]any{
-		"mailbox_id":   mbID,
-		"from_addr":    from,
-		"to_addr":      toLine,
-		"cc_addr":      strings.Join(cc, ", "),
-		"subject":      subject,
-		"preview":      truncate(req.Text, 200),
-		"body_text":    req.Text,
-		"body_html":    "",
-		"search_text":  strings.ToLower(subject + " " + from + " " + toLine + " " + req.Text),
-		"thread_id":    "",
-		"unread":       false,
-		"starred":      false,
-		"resend_id":    sentID,
-		"message_id":   "",
-		"received_for": from,
-		"direction":    "out",
-		"in_reply_to":  "",
-		"references":   "",
-		"created_at":   time.Now().UnixMilli(),
+		"mailbox_id":     mbID,
+		"from_addr":      from,
+		"to_addr":        toLine,
+		"cc_addr":        strings.Join(cc, ", "),
+		"subject":        subject,
+		"preview":        truncate(textPart, 200),
+		"body_text":      textPart,
+		"body_html":      htmlPart,
+		"html_sanitized": true,
+		"search_text":    strings.ToLower(subject + " " + from + " " + toLine + " " + textPart),
+		"thread_id":      "",
+		"unread":         false,
+		"starred":        false,
+		"resend_id":      sentID,
+		"message_id":     "",
+		"received_for":   from,
+		"direction":      "out",
+		"in_reply_to":    "",
+		"references":     "",
+		"created_at":     time.Now().UnixMilli(),
 	}
 	if _, err := p.Create("messages", outDoc); err != nil {
 		// The mail is already out the door — report the send as successful but
@@ -178,6 +192,8 @@ func composeMessage(mbID string, isAdmin bool, req composeReq) (map[string]any, 
 		"to":      to,
 		"cc":      cc,
 		"subject": subject,
+		"format":  normalizeFormat(req.Format),
+		"html":    htmlPart != "",
 		"stored":  true,
 	}, nil
 }
@@ -267,15 +283,44 @@ func handleComposeCmd() {
 	from := fs.String("from", "", "sender address (defaults to mailbox primary)")
 	subject := fs.String("subject", "", "subject")
 	text := fs.String("text", "", "body text")
+	format := fs.String("format", "text", "body format: text|html|markdown")
 	_ = fs.Parse(os.Args[2:])
 	if *to == "" || *subject == "" || *text == "" {
 		fail(80, "input", "usage: send --to a@b.fr --subject S --text T [--from x] [--cc] [--bcc]", "")
 	}
 	data, err := composeMessage("", true, composeReq{
-		From: *from, To: *to, Cc: *cc, Bcc: *bcc, Subject: *subject, Text: *text,
+		From: *from, To: *to, Cc: *cc, Bcc: *bcc, Subject: *subject, Text: *text, Format: *format,
 	})
 	if err != nil {
 		fail(100, "integration", err.Error(), "set RESEND_API_KEY, POCHE_TOKEN and MAIL_FROM_ALLOWLIST")
 	}
 	outOK(data)
+}
+
+// handleRenderAPI previews a body exactly as it would be sent: same Markdown
+// converter, same sanitizer. A preview rendered separately in the browser
+// would be a different pipeline, and would lie about what actually goes out.
+func handleRenderAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, 405, map[string]any{"ok": false, "error": "POST only"})
+		return
+	}
+	var req struct {
+		Text   string `json:"text"`
+		Format string `json:"format"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad json"})
+		return
+	}
+	text, html, err := renderBody(req.Text, req.Format)
+	if err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{
+		"format": normalizeFormat(req.Format),
+		"html":   html,
+		"text":   text,
+	}})
 }

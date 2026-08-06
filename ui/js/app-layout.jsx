@@ -18,6 +18,8 @@ function AppLayout({
   selectAllPages,
   setSelectAllPages,
   onCreateTag,
+  onRenameTag,
+  onDeleteTag,
   onBulk,
   onMarkAll,
   msg,
@@ -56,6 +58,8 @@ function AppLayout({
         total={total}
         status={status}
         onCreateTag={onCreateTag}
+        onRenameTag={onRenameTag}
+        onDeleteTag={onDeleteTag}
         onLogout={onLogout}
         token={token}
         account={account}
@@ -133,6 +137,7 @@ function AppLayout({
         onSend={onCompose}
         addresses={sendAddresses}
         defaultFrom={account?.address || (sendAddresses || [])[0] || ""}
+        token={token}
         busy={busy}
       />
     </div>

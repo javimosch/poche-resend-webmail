@@ -167,6 +167,21 @@ function App() {
   const onCreateTag = (name) =>
     createTag(token, name).then(() => loadTags().then((names) => loadUnread(names)));
 
+  const afterTagChange = (gone) => {
+    // Leaving the view of a tag that no longer exists would show an empty list
+    // with no way back, so fall back to the inbox.
+    if (gone && view === "tag" && tagView === gone) setView("inbox", "");
+    return loadTags().then((names) => loadUnread(names));
+  };
+
+  const onRenameTag = (name, newName) =>
+    renameTag(token, name, newName).then((res) => {
+      if (view === "tag" && tagView === name) setView("tag", res?.name || newName);
+      return loadTags().then((names) => loadUnread(names));
+    });
+
+  const onDeleteTag = (name) => deleteTag(token, name).then(() => afterTagChange(name));
+
   const onBulk = (action, tag) => {
     const ctx = ctxRef.current;
     if (!selectAllPages && !checked.length) return;
@@ -312,6 +327,8 @@ function App() {
       selectAllPages={selectAllPages}
       setSelectAllPages={setSelectAllPages}
       onCreateTag={onCreateTag}
+      onRenameTag={onRenameTag}
+      onDeleteTag={onDeleteTag}
       onBulk={onBulk}
       onMarkAll={onMarkAll}
       msg={msg}

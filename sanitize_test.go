@@ -123,3 +123,43 @@ func TestPlaintextValuesStillReadable(t *testing.T) {
 		t.Errorf("legacy plaintext broke: %q %v", got, err)
 	}
 }
+
+func TestRenderBodyFormats(t *testing.T) {
+	// plain text stays plain — no html part, so the mail is not upgraded silently
+	text, html, err := renderBody("Bonjour\nMerci", "text")
+	if err != nil || html != "" || text != "Bonjour\nMerci" {
+		t.Errorf("text mode changed the body: %q / %q / %v", text, html, err)
+	}
+
+	// markdown becomes html, and keeps the source as the plain alternative
+	text, html, err = renderBody("# Devis\n\n**Bonjour**, voici le [devis](https://x.fr).", "markdown")
+	if err != nil {
+		t.Fatalf("markdown: %v", err)
+	}
+	for _, want := range []string{"<h1", "Devis", "<strong>", "https://x.fr"} {
+		if !containsFold(html, want) {
+			t.Errorf("markdown lost %q: %q", want, html)
+		}
+	}
+	if !containsFold(text, "# Devis") {
+		t.Errorf("markdown source should remain as the text alternative: %q", text)
+	}
+
+	// html mode is sanitized like inbound, and gets a text alternative
+	text, html, err = renderBody(`<p>Hi</p><script>alert(1)</script>`, "html")
+	if err != nil {
+		t.Fatalf("html: %v", err)
+	}
+	if containsFold(html, "<script") || containsFold(html, "alert(1)") {
+		t.Errorf("outbound html was not sanitized: %q", html)
+	}
+	if !containsFold(text, "Hi") {
+		t.Errorf("no plain-text alternative generated: %q", text)
+	}
+
+	// markdown that smuggles html is sanitized too
+	_, html, _ = renderBody("Hello <img src=x onerror=alert(1)>", "markdown")
+	if containsFold(html, "onerror") {
+		t.Errorf("markdown passed through an event handler: %q", html)
+	}
+}

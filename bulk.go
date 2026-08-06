@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 )
 
 type bulkReq struct {
@@ -126,7 +128,181 @@ func handleTagsAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 201, map[string]any{"ok": true, "data": json.RawMessage(created)})
 		return
 	}
-	writeJSON(w, 405, map[string]any{"ok": false, "error": "GET or POST"})
+	// PUT {"name":"old","new_name":"new"} — rename everywhere the tag is used.
+	if r.Method == http.MethodPut {
+		var body struct {
+			Name    string `json:"name"`
+			NewName string `json:"new_name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "error": "bad json"})
+			return
+		}
+		if isArchiveName(body.Name) || isArchiveName(body.NewName) {
+			writeJSON(w, 400, map[string]any{"ok": false, "error": "archive is a system tag and cannot be renamed"})
+			return
+		}
+		from := sanitizeTagName(body.Name)
+		to := sanitizeTagName(body.NewName)
+		if from == "" || to == "" {
+			writeJSON(w, 400, map[string]any{"ok": false, "error": "name and new_name required"})
+			return
+		}
+		if from == to {
+			writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"renamed": 0, "name": to}})
+			return
+		}
+		n, err := renameTag(p, from, to)
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"renamed": n, "from": from, "name": to}})
+		return
+	}
+	// DELETE ?name=x — drop the tag and every message link to it.
+	if r.Method == http.MethodDelete {
+		raw := r.URL.Query().Get("name")
+		if isArchiveName(raw) {
+			writeJSON(w, 400, map[string]any{"ok": false, "error": "archive is a system tag and cannot be deleted"})
+			return
+		}
+		name := sanitizeTagName(raw)
+		if name == "" {
+			writeJSON(w, 400, map[string]any{"ok": false, "error": "name required"})
+			return
+		}
+		n, err := deleteTagEverywhere(p, name)
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"deleted": true, "name": name, "untagged": n}})
+		return
+	}
+	writeJSON(w, 405, map[string]any{"ok": false, "error": "GET, POST, PUT or DELETE"})
+}
+
+// isArchiveName spots the system tag before sanitizeTagName blanks it out.
+func isArchiveName(s string) bool {
+	return strings.EqualFold(strings.TrimSpace(s), tagArchive)
+}
+
+type tagLink struct {
+	id        string
+	messageID string
+}
+
+// listTagLinks returns the message_tags rows carrying a tag.
+func listTagLinks(p *Poche, tag string) ([]tagLink, error) {
+	data, err := p.List("message_tags", "tag="+tag, 10000, 0, "", false)
+	if err != nil {
+		return nil, err
+	}
+	var page struct {
+		Items []struct {
+			ID  string `json:"id"`
+			Doc struct {
+				MessageID string `json:"message_id"`
+			} `json:"doc"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(data, &page); err != nil {
+		return nil, err
+	}
+	out := make([]tagLink, 0, len(page.Items))
+	for _, it := range page.Items {
+		out = append(out, tagLink{id: it.ID, messageID: it.Doc.MessageID})
+	}
+	return out, nil
+}
+
+// renameTag rewrites the tag row and every message link, so messages keep
+// their labels instead of silently losing them.
+func renameTag(p *Poche, from, to string) (int, error) {
+	links, err := listTagLinks(p, from)
+	if err != nil {
+		return 0, err
+	}
+	// Create the destination tag first; a partial rename that lost the tag row
+	// would leave links pointing at a tag the sidebar never lists.
+	if err := ensureTagRow(p, to); err != nil {
+		return 0, err
+	}
+	// message_tags is exposed for create+delete but not update, so a relabel is
+	// "attach the new tag, then drop the old" — the same path tagging uses.
+	moved := 0
+	for _, l := range links {
+		if l.messageID == "" {
+			continue
+		}
+		if err := ensureTag(p, l.messageID, to); err != nil {
+			return moved, fmt.Errorf("relabel %s: %w", l.messageID, err)
+		}
+		if err := removeTag(p, l.messageID, from); err != nil {
+			return moved, fmt.Errorf("drop old label %s: %w", l.messageID, err)
+		}
+		moved++
+	}
+	if err := deleteTagRow(p, from); err != nil {
+		return moved, err
+	}
+	return moved, nil
+}
+
+func deleteTagEverywhere(p *Poche, name string) (int, error) {
+	links, err := listTagLinks(p, name)
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	for _, l := range links {
+		if err := p.Delete("message_tags", l.id); err != nil {
+			return removed, fmt.Errorf("untag %s: %w", l.id, err)
+		}
+		removed++
+	}
+	if err := deleteTagRow(p, name); err != nil {
+		return removed, err
+	}
+	return removed, nil
+}
+
+func ensureTagRow(p *Poche, name string) error {
+	data, err := p.List("tags", "name="+name, 1, 0, "", false)
+	if err != nil {
+		return err
+	}
+	var page struct {
+		Total int `json:"total"`
+	}
+	_ = json.Unmarshal(data, &page)
+	if page.Total > 0 {
+		return nil
+	}
+	_, err = p.Create("tags", map[string]any{"name": name})
+	return err
+}
+
+func deleteTagRow(p *Poche, name string) error {
+	data, err := p.List("tags", "name="+name, 10, 0, "", false)
+	if err != nil {
+		return err
+	}
+	var page struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(data, &page); err != nil {
+		return err
+	}
+	for _, it := range page.Items {
+		if err := p.Delete("tags", it.ID); err != nil {
+			return fmt.Errorf("delete tag row: %w", err)
+		}
+	}
+	return nil
 }
 
 func handleMessageTagsAPI(w http.ResponseWriter, r *http.Request) {

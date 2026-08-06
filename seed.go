@@ -140,7 +140,7 @@ func ensureSchema(p *Poche) error {
 	if err := p.AdminExpose("messages", "read,create,update,delete"); err != nil {
 		return err
 	}
-	if err := p.AdminExpose("tags", "read,create"); err != nil {
+	if err := p.AdminExpose("tags", "read,create,delete"); err != nil {
 		return err
 	}
 	if err := p.AdminExpose("message_tags", "read,create,delete"); err != nil {

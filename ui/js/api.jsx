@@ -249,6 +249,53 @@ function fetchSendAddresses(token) {
     .catch(() => []);
 }
 
+function renderBodyPreview(token, text, format) {
+  return apiFetch(token, "/api/render", {
+    method: "POST",
+    body: JSON.stringify({ text, format }),
+  });
+}
+
+function renameTag(token, name, newName) {
+  return apiFetch(token, "/api/tags", {
+    method: "PUT",
+    body: JSON.stringify({ name, new_name: newName }),
+  });
+}
+
+function deleteTag(token, name) {
+  return apiFetch(token, "/api/tags?name=" + encodeURIComponent(name), { method: "DELETE" });
+}
+
+// The async clipboard API needs a secure context AND permission, and it
+// rejects rather than throwing when denied — so the textarea fallback has to
+// run on rejection too, not only when the API is missing.
+function legacyCopy(text) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text).catch(() =>
+      legacyCopy(text) ? Promise.resolve() : Promise.reject(new Error("copy blocked"))
+    );
+  }
+  return legacyCopy(text) ? Promise.resolve() : Promise.reject(new Error("copy blocked"));
+}
+
 function createTag(token, name) {
   return apiFetch(token, "/api/tags", {
     method: "POST",
