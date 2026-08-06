@@ -26,9 +26,9 @@ and prints a URL. No Resend account needed to look around. Everything lands in
 ./bootstrap.sh stop     # stop both processes
 ```
 
-> **Heads up:** the currently published `poche` linux-amd64 release crashes on
-> `init` on some hosts. `bootstrap.sh` checks for this and tells you to build
-> poche from source and pass `POCHE_BIN=/path/to/poche`.
+Needs Linux/amd64 for the prebuilt `poche` binary. On other platforms, build
+[poche](https://github.com/javimosch/poche) yourself and pass
+`POCHE_BIN=/path/to/poche`.
 
 ## What it does
 
