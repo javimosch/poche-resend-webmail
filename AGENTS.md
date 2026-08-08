@@ -221,6 +221,105 @@ which storing is refused so a mailbox cannot fill the host. The compose endpoint
 `MaxBytesReader` so an oversized upload is refused before it buffers. File
 names are stripped of any path — `../../etc/passwd` is sent as `passwd`.
 
+## Scoped: moving attachment storage to machin-esetres (2026-08-08, not yet built)
+
+[machin-esetres](https://github.com/javimosch/machin-esetres) is a self-hosted
+object store (buckets, sha256-deduped objects, bearer-token REST + a real
+SigV4 S3 facade) built specifically to replace `blobstore.go`. It's deployed
+on rbm21 (`http://100.123.0.125:9000`, internal-only over Tailscale) but
+**not wired up here yet** — this section is the plan, written before the code,
+same discipline as machin-esetres's own AGENTS.md.
+
+### Why (recap)
+
+`blobstore.go` is local-disk-only (`BLOB_DIR`), single host, no dedup by
+design (see its own comment: random not content-addressed ids, specifically
+*because* there was no refcounting — deleting one message could pull bytes
+out from under another that happened to share content). machin-esetres
+solves the refcounting problem properly, so that specific past limitation
+goes away as a side effect of migrating, not just the disk-location problem.
+
+### Target architecture
+
+**Proxy, don't redirect.** `messages.go`'s `handleAttachmentOpen` currently
+opens the local file and streams it with hostile-to-browser headers
+(`Content-Disposition: attachment`, `nosniff`, sandbox CSP) — machin-esetres
+has no concept of those and must never serve bytes straight to a browser.
+poche-resend-webmail keeps terminating that policy: it does an HTTP GET to
+machin-esetres and copies the response body through with its own headers
+unchanged. The same reasoning applies to `PUT` on write.
+
+Four call sites, all in `blobstore.go`'s current interface — the swap is a
+drop-in replacement of that file, not a redesign of its callers:
+
+| Current (`blobstore.go`) | Becomes | Call site |
+|---|---|---|
+| `putBlob(data) (id, err)` | `HTTP PUT /b/<bucket>/o/<id>` to machin-esetres, body = data | `compose.go:487` |
+| `blobPath(id) (path, ok)` + `os.Open` | `HTTP GET /b/<bucket>/o/<id>`, stream `resp.Body` through | `messages.go:156` |
+| `deleteBlob(id)` | `HTTP DELETE /b/<bucket>/o/<id>` | `cleanup.go:365`, `compose.go:505` |
+| `freeBytes`/`blobMinFree` | drop — machin-esetres's own host disk is now its concern, not this app's | (internal to blobstore.go only) |
+
+Existing `FileID` values (the random hex ids `putBlob` already generates and
+that poche documents already reference) become the machin-esetres **object
+key** unchanged — no document rewrites needed anywhere, just a different
+place the bytes named by that key physically live.
+
+### Config (new env vars)
+
+- `ESETRES_URL` — e.g. `http://100.123.0.125:9000` (Phase 1 API, not the S3
+  facade — no reason to pay the SigV4 signing cost for an internal
+  service-to-service call this app fully controls both ends of).
+- `ESETRES_BUCKET`, `ESETRES_TOKEN` — **recommend one shared bucket** (e.g.
+  `poche-resend-webmail`) for the whole deployment, not bucket-per-mailbox.
+  machin-esetres's own design assumed bucket-per-mailbox for a
+  multi-tenant *object store*, but poche-resend-webmail already isolates by
+  `mailbox_id` inside its own documents — a second isolation layer at the
+  bucket level buys nothing here and would mean encrypting/rotating a
+  per-mailbox token (reusing the existing `secrets.go` AES-GCM machinery)
+  for no real benefit. One token, `readSecretFlag`'d in like every other
+  credential in this app (stdin or `env:NAME`, never argv).
+
+### Migration path for existing local blobs
+
+1. Ship the machin-esetres client code with a **feature flag** (`ESETRES_URL`
+   unset = current behavior, local disk only — zero risk to existing
+   deployments, including La Cure's live one).
+2. A one-time `poche-resend-webmail migrate-blobs` CLI command: walk
+   `BLOB_DIR`, `PUT` each file to machin-esetres under its existing id as the
+   key, verify the round-trip (download it back, compare sha256), then
+   **don't delete the local copy yet**.
+3. Cut reads over first (`handleAttachmentOpen` tries machin-esetres, falls
+   back to local disk if not found there) — this is the reversible step.
+4. Once reads have run clean for a while, cut writes over (`putBlob` calls
+   removed, `compose.go`/`cleanup.go` call the HTTP client only).
+5. Only then delete local `BLOB_DIR` — and only after `migrate-blobs` has
+   been re-run once more to catch anything written between steps 2 and 4.
+
+This is the same "rehearse against a real copy of prod data before touching
+prod" discipline used for the credentials-encryption migration and the
+0.2.3→0.3.2 poche upgrade earlier in this project's history — copy La Cure's
+real `BLOB_DIR` to a scratch machin-esetres bucket first, verify counts and
+byte-for-byte content, before running `migrate-blobs` against the live one.
+
+### New failure mode to design for
+
+Today, serving an attachment is a local disk read — it cannot fail for
+network reasons. After this migration, it depends on rbm21 being reachable
+over Tailscale. `handleAttachmentOpen` needs an explicit timeout and a clear
+error (not a hang) when machin-esetres is unreachable, and this becomes a
+new entry in whatever uptime/monitoring exists for poche-resend-webmail
+(there is none dedicated today, per the README's honest-limitations list).
+
+### Explicitly not decided yet
+
+- Whether `migrate-blobs` is a real subcommand shipped in `poche-resend-webmail`
+  or a one-off script run once and thrown away — leaning subcommand, since
+  "a bad blob turned up, re-sync it" could plausibly recur.
+- Whether inbound attachments (currently blocked on a read-capable Resend
+  key — a separate, unrelated gap) land in machin-esetres too once that gets
+  unblocked, or stay on the Resend-redirect path. No decision needed until
+  the Resend key gap is actually resolved.
+
 ## Branding and layout (v0.3.5+)
 
 The sidebar name is per **mailbox** (`brand`), falling back to `BRAND_NAME`
