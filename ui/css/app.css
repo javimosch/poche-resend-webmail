@@ -63,6 +63,35 @@ body {
 .prose-mail a { color: rgb(var(--accent)); text-decoration: underline; }
 .prose-mail p { margin: 0.6em 0; }
 
+/* Tailwind's preflight resets headings/lists to inherit size and drops list
+   markers entirely — invisible in raw HTML but a rendered mail (or the
+   compose preview) needs real typography to look like anything was rendered
+   at all rather than plain paragraphs. */
+.prose-mail h1 { font-size: 1.6em; font-weight: 700; margin: 0.8em 0 0.4em; line-height: 1.25; }
+.prose-mail h2 { font-size: 1.35em; font-weight: 700; margin: 0.8em 0 0.4em; line-height: 1.3; }
+.prose-mail h3 { font-size: 1.15em; font-weight: 700; margin: 0.7em 0 0.35em; }
+.prose-mail h4, .prose-mail h5, .prose-mail h6 { font-size: 1em; font-weight: 700; margin: 0.6em 0 0.3em; }
+.prose-mail ul { list-style: disc; padding-left: 1.4em; margin: 0.6em 0; }
+.prose-mail ol { list-style: decimal; padding-left: 1.4em; margin: 0.6em 0; }
+.prose-mail li { margin: 0.2em 0; }
+.prose-mail li > ul, .prose-mail li > ol { margin: 0.2em 0; }
+.prose-mail blockquote {
+  margin: 0.6em 0;
+  padding: 0.1em 1em;
+  border-left: 3px solid rgb(var(--paper-line));
+  color: rgb(var(--ink-muted));
+}
+.prose-mail code {
+  font-family: ui-monospace, monospace;
+  background: rgb(var(--paper-line) / 0.5);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+.prose-mail pre code { background: none; padding: 0; }
+.prose-mail hr { border: none; border-top: 1px solid rgb(var(--paper-line)); margin: 1em 0; }
+.prose-mail strong, .prose-mail b { font-weight: 700; }
+
 /* Mail is written for arbitrary widths: plain-text bodies are pre-formatted,
    senders hard-code table and image widths. Keep all of it inside the pane so
    a narrow screen never scrolls sideways. */
@@ -82,6 +111,13 @@ body {
   margin: 0.5rem;
 }
 :root[data-theme="dark"] .prose-mail--html a { color: #7a5a1f; }
+
+/* contentEditable has no native placeholder attribute. */
+.wysiwyg-editable:empty:before {
+  content: attr(data-placeholder);
+  color: rgb(var(--ink-dim));
+  pointer-events: none;
+}
 
 /* Form controls follow the theme rather than the OS default. */
 input, textarea, select, button {
