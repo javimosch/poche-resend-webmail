@@ -121,11 +121,11 @@ function MarkdownSplitEditor({ value, onChange, token, placeholder, fieldClass }
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        rows={14}
+        rows={22}
         placeholder={placeholder}
-        className={fieldClass + " resize-y font-mono text-[0.9rem]"}
+        className={fieldClass + " resize-y font-mono text-[0.9rem] min-h-[50vh]"}
       />
-      <div className="min-h-[10rem] max-h-[22rem] rounded border border-paper-line bg-paper px-4 py-3 prose-mail prose-mail--html overflow-y-auto text-sm">
+      <div className="min-h-[50vh] max-h-[70vh] rounded border border-paper-line bg-paper px-4 py-3 prose-mail prose-mail--html overflow-y-auto text-sm">
         {err ? (
           <p className="text-red-400 text-xs">{t("preview_failed", err)}</p>
         ) : value.trim() ? (
@@ -138,7 +138,7 @@ function MarkdownSplitEditor({ value, onChange, token, placeholder, fieldClass }
   );
 }
 
-function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, token }) {
+function ComposeModal({ open, onClose, minimized, setMinimized, onSend, addresses, defaultFrom, busy, token }) {
   const { t } = useI18n();
   const [from, setFrom] = React.useState(defaultFrom || "");
   const [to, setTo] = React.useState("");
@@ -279,25 +279,66 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
       .catch((err) => setError(String(err.message || err)));
   };
 
+  const closeAndReset = () => {
+    onClose();
+    setMinimized(false);
+  };
+
+  if (minimized) {
+    return (
+      <div
+        className="fixed bottom-0 right-4 z-50 w-72 bg-paper-raised border border-b-0 border-paper-line rounded-t-lg shadow-2xl cursor-pointer"
+        onClick={() => setMinimized(false)}
+      >
+        <header className="px-4 py-2.5 flex items-center justify-between gap-2">
+          <span className="text-sm text-ink truncate">{subject.trim() || t("new_message")}</span>
+          <span className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              title={t("expand")}
+              onClick={(e) => { e.stopPropagation(); setMinimized(false); }}
+              className="w-6 h-6 flex items-center justify-center rounded text-ink-muted hover:text-accent hover:bg-accent-soft leading-none"
+            >
+              ▢
+            </button>
+            <button
+              type="button"
+              title={t("close")}
+              onClick={(e) => { e.stopPropagation(); closeAndReset(); }}
+              className="w-6 h-6 flex items-center justify-center rounded text-ink-muted hover:text-accent hover:bg-accent-soft leading-none"
+            >
+              ✕
+            </button>
+          </span>
+        </header>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-0 py-0 md:px-4 md:py-10"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-0 py-0 md:px-4 md:py-6"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <form
         onSubmit={submit}
-        className="w-full h-full md:h-auto md:max-w-2xl bg-paper-raised border border-paper-line md:rounded-lg shadow-2xl flex flex-col max-h-full"
+        className="w-full h-full md:h-[92vh] md:w-[94vw] md:max-w-[1400px] bg-paper-raised border border-paper-line md:rounded-lg shadow-2xl flex flex-col max-h-full"
       >
         <header className="px-5 py-3 border-b border-paper-line flex items-center justify-between">
           <span className="font-display text-lg text-ink">{t("new_message")}</span>
-          <button type="button" onClick={onClose} className={btn}>
-            {t("close")}
-          </button>
+          <span className="flex items-center gap-2">
+            <button type="button" title={t("minimize")} onClick={() => setMinimized(true)} className={btn}>
+              ‒
+            </button>
+            <button type="button" onClick={closeAndReset} className={btn}>
+              {t("close")}
+            </button>
+          </span>
         </header>
 
-        <div className="px-5 py-4 space-y-3 overflow-y-auto scrollbar-thin">
+        <div className="px-5 py-4 space-y-3 overflow-y-auto scrollbar-thin flex-1">
           <label className="block">
             <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">{t("from")}</span>
             {(addresses || []).length > 1 ? (
@@ -376,7 +417,7 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
               placeholder={t("html_placeholder_wysiwyg")}
               className={
                 field.replace("px-3 py-2", "px-4 py-3") +
-                " min-h-[16rem] prose-mail wysiwyg-editable overflow-y-auto"
+                " min-h-[50vh] max-h-[70vh] prose-mail wysiwyg-editable overflow-y-auto"
               }
             />
           ) : format === "markdown" ? (
@@ -391,9 +432,9 @@ function ComposeModal({ open, onClose, onSend, addresses, defaultFrom, busy, tok
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              rows={14}
+              rows={22}
               placeholder={t("body_placeholder")}
-              className={field + " resize-y"}
+              className={field + " resize-y min-h-[50vh]"}
             />
           )}
 

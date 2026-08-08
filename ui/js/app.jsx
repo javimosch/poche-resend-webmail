@@ -34,6 +34,7 @@ function App() {
   const [checked, setChecked] = useState([]);
   const [selectAllPages, setSelectAllPages] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeMinimized, setComposeMinimized] = useState(false);
   const [sendAddresses, setSendAddresses] = useState([]);
   const pageSize = 50;
   const ctxRef = useRef({ view: "inbox", tagView: "", q: "" });
@@ -353,6 +354,8 @@ function App() {
       onLogout={() => { clearAuth(); setPassword(""); }}
       composeOpen={composeOpen}
       setComposeOpen={setComposeOpen}
+      composeMinimized={composeMinimized}
+      setComposeMinimized={setComposeMinimized}
       sendAddresses={sendAddresses}
       onCompose={onCompose}
     />

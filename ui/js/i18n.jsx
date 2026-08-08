@@ -153,6 +153,8 @@ const I18N = {
     wysiwyg_clear: "Clear formatting",
     html_placeholder_wysiwyg: "Write your message…",
     switch_format_confirm: "Switching format clears the current draft. Continue?",
+    minimize: "Minimize",
+    expand: "Expand",
   },
 
   fr: {
@@ -296,6 +298,8 @@ const I18N = {
     wysiwyg_clear: "Effacer la mise en forme",
     html_placeholder_wysiwyg: "Écrivez votre message…",
     switch_format_confirm: "Changer de format efface le brouillon actuel. Continuer ?",
+    minimize: "Réduire",
+    expand: "Agrandir",
   },
 };
 

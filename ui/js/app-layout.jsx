@@ -43,6 +43,8 @@ function AppLayout({
   brand,
   onBack,
   setComposeOpen,
+  composeMinimized,
+  setComposeMinimized,
   sendAddresses,
   onCompose,
 }) {
@@ -96,7 +98,7 @@ function AppLayout({
         onLogout={onLogout}
         token={token}
         account={account}
-        onComposeClick={() => { setComposeOpen(true); setNavOpen(false); }}
+        onComposeClick={() => { setComposeOpen(true); setComposeMinimized(false); setNavOpen(false); }}
         brand={brand}
         onCloseNav={() => setNavOpen(false)}
       />
@@ -171,6 +173,8 @@ function AppLayout({
       <ComposeModal
         open={composeOpen}
         onClose={() => setComposeOpen(false)}
+        minimized={composeMinimized}
+        setMinimized={setComposeMinimized}
         onSend={onCompose}
         addresses={sendAddresses}
         defaultFrom={account?.address || (sendAddresses || [])[0] || ""}
