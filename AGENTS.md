@@ -221,6 +221,46 @@ which storing is refused so a mailbox cannot fill the host. The compose endpoint
 `MaxBytesReader` so an oversized upload is refused before it buffers. File
 names are stripped of any path — `../../etc/passwd` is sent as `passwd`.
 
+## Inbound attachment content — fixed (2026-08-09)
+
+Inbound attachments used to arrive as names without content, attributed to
+La Cure's Resend key being send-only. That diagnosis was **wrong**: Resend's
+attachment objects carry no per-attachment download link at all, verified
+by dumping a real message's raw API response directly with a genuine
+read-capable key (the same wrong assumption was found and fixed first in
+the sibling machin-resend-inbox project's issue #1 — this is that same fix,
+ported to Go). The old code read `attachment.download_url`, which never
+exists; it would have stayed empty forever regardless of key permissions.
+
+What's actually there: `.raw.download_url`, a link to the entire raw RFC822
+email (also expiring). `upsertAttachments` (sync.go) now downloads that
+once per message and extracts each attachment's bytes from the MIME parts
+directly (`mime_extract.go`, Go's `mime/multipart` + `net/mail` — no
+hand-rolled parser needed, unlike the MFL side, which had no such stdlib).
+Extracted bytes are stored in **machin-esetres** (`esetres.go`; `ESETRES_URL`/
+`ESETRES_BUCKET`/`ESETRES_TOKEN`, one shared bucket, not bucket-per-mailbox
+— matches the naming convention and single-bucket recommendation from the
+scoping below) under `<message_id>/<resend_attach_id>/<filename>`, and
+`messages.go`'s `handleAttachmentOpen` now proxies from there (never a
+redirect — machin-esetres doesn't know about the
+Content-Disposition/nosniff/CSP headers this app sets, so the app keeps
+serving the bytes itself, same as the existing local-blob path).
+
+Without `ESETRES_*` configured, attachment metadata still stores exactly as
+before (`stored: false`, no content) — this is additive, not a hard
+dependency on machin-esetres existing.
+
+Verified end-to-end against real production data, not just typechecked:
+a scratch poche + machin-esetres instance, La Cure's real Resend account,
+`sync` pulling a real message with a real attachment — the extracted
+content matched Resend's own reported size (240 bytes) exactly, and
+`GET /api/attachments/<id>/open` served it back with the correct
+`Content-Disposition`/`nosniff`/CSP headers intact.
+
+New schema field: `attachments.esetres_key` (string). `download_url` is
+kept in the schema for backward compatibility but is now always written
+empty — it never carried real data.
+
 ## Scoped: moving attachment storage to machin-esetres (2026-08-08, not yet built)
 
 [machin-esetres](https://github.com/javimosch/machin-esetres) is a self-hosted

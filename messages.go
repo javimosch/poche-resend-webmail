@@ -179,9 +179,32 @@ func handleAttachmentOpen(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Inbound attachments still live at Resend until a fetch-on-ingest exists.
-	if url := strField(doc, "download_url"); url != "" {
-		http.Redirect(w, r, url, http.StatusFound)
+	// Inbound (cached in machin-esetres at ingest time — see sync.go's
+	// upsertAttachments). Proxied, never a redirect: a raw redirect to an
+	// external URL would bypass the same Content-Disposition/nosniff/CSP
+	// headers the local-blob path above sets, and machin-esetres has no way
+	// to know about that policy itself. This replaces the old dead
+	// download_url-redirect branch — Resend never actually returns a
+	// per-attachment download_url (see mime_extract.go's header comment for
+	// how that was confirmed), so that branch never fired in practice.
+	if key := strField(doc, "esetres_key"); key != "" {
+		data, ct, err := esetresGet(key)
+		if err != nil {
+			writeJSON(w, 404, map[string]any{"ok": false, "error": "attachment content unavailable"})
+			return
+		}
+		if ct == "" {
+			ct = strField(doc, "content_type")
+		}
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Content-Disposition", "attachment; filename=\""+safeFilename(filename)+"\"")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+		w.Write(data)
 		return
 	}
 	writeJSON(w, 404, map[string]any{"ok": false, "error": "no content stored for this attachment"})

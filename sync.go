@@ -232,30 +232,72 @@ func findByResendID(p *Poche, resendID string) (string, error) {
 	return page.Items[0].ID, nil
 }
 
+// upsertAttachments stores attachment metadata, and — when machin-esetres is
+// configured — the actual content. Resend's attachment objects carry no
+// per-attachment download link (verified against a real message, not
+// assumed: see mime_extract.go's header comment); what's fetchable is
+// doc["raw"]["download_url"], the entire raw email, which this downloads
+// ONCE per message and extracts every attachment from, rather than
+// re-fetching per attachment.
 func upsertAttachments(p *Poche, messageID string, doc map[string]any) error {
-	raw, ok := doc["attachments"]
+	rawAttachments, ok := doc["attachments"]
 	if !ok || messageID == "" {
 		return nil
 	}
-	arr, ok := raw.([]any)
-	if !ok {
+	arr, ok := rawAttachments.([]any)
+	if !ok || len(arr) == 0 {
 		return nil
 	}
+
+	rawURL := ""
+	if rawObj, ok := doc["raw"].(map[string]any); ok {
+		rawURL = strField(rawObj, "download_url")
+	}
+	var rawEmail []byte
+	if esetresEnabled() && rawURL != "" {
+		var err error
+		rawEmail, err = fetchRawEmail(rawURL)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "{\"event\":\"attachment_raw_fetch_err\",\"message_id\":%q,\"err\":%q}\n", messageID, err.Error())
+		}
+	}
+
 	for _, a := range arr {
 		m, ok := a.(map[string]any)
 		if !ok {
 			continue
 		}
 		aid := strField(m, "id")
+		filename := strField(m, "filename")
+		contentType := strField(m, "content_type")
+		esetresKey := ""
+		stored := false
+
+		if len(rawEmail) > 0 && filename != "" {
+			data, err := extractAttachmentFromRawEmail(rawEmail, filename)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "{\"event\":\"attachment_extract_err\",\"message_id\":%q,\"filename\":%q,\"err\":%q}\n", messageID, filename, err.Error())
+			} else {
+				key := messageID + "/" + aid + "/" + safeFilename(filename)
+				if err := esetresPut(key, data, contentType); err != nil {
+					fmt.Fprintf(os.Stderr, "{\"event\":\"attachment_esetres_put_err\",\"message_id\":%q,\"filename\":%q,\"err\":%q}\n", messageID, filename, err.Error())
+				} else {
+					esetresKey = key
+					stored = true
+				}
+			}
+		}
+
 		_, _ = p.Create("attachments", map[string]any{
 			"message_id":       messageID,
-			"filename":         strField(m, "filename"),
-			"content_type":     strField(m, "content_type"),
+			"filename":         filename,
+			"content_type":     contentType,
 			"resend_attach_id": aid,
-			"download_url":     strField(m, "download_url"),
+			"download_url":     "",
 			"file_id":          "",
+			"esetres_key":      esetresKey,
 			"bytes":            m["size"],
-			"stored":           strField(m, "download_url") != "",
+			"stored":           stored,
 		})
 	}
 	return nil
