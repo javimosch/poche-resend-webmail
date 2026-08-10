@@ -347,6 +347,12 @@ function composeMail(token, body) {
   });
 }
 
+function fetchThread(token, id) {
+  return apiFetch(token, "/api/messages/" + encodeURIComponent(id) + "/thread")
+    .then((d) => (d.items || []).map(rowFromItem))
+    .catch(() => []);
+}
+
 function fetchSendAddresses(token) {
   return apiFetch(token, "/api/mailbox/addresses")
     .then((d) => ({

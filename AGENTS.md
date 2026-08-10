@@ -627,6 +627,82 @@ unconfigured Resend key, same failure point compose hits) — confirms
 confirmed the HTML tab renders the WYSIWYG editor, accepts input, and
 enables Send.
 
+## Gmail-style conversation threading (2026-08-10)
+
+Every message row shows only itself — to see a whole back-and-forth you
+had to switch between Inbox and Sent and match subjects by eye. Root
+cause: **every inbound message got `thread_id` = its own message_id**,
+because nothing ever read the In-Reply-To/References headers Resend's
+inbound payload actually carries (confirmed against a real payload via
+`GET /emails/receiving/:id` — `doc["headers"]` is a flat
+lowercased-header-name → string map, e.g. `headers["in-reply-to"]`; not
+assumed, checked). A reply-back from a real sender never joined the
+thread it was replying to.
+
+Fixed in `sync.go`'s `upsertInbound` (the single function both the webhook
+and `sync` paths funnel through): `extractMessageIDs` pulls every
+`<...>`-wrapped id out of the In-Reply-To/References header text, and
+`findThreadIDByMessageID` checks each candidate (In-Reply-To first, then
+References most-recent-first, for the case where the direct parent was
+never stored but an earlier ancestor was) against messages already in the
+mailbox. If one matches, the new message adopts THAT thread_id instead of
+minting its own — joining the conversation instead of starting a new one.
+`reply.go` was the other half of the same bug: it set the outbound
+reply's `thread_id` to the TARGET message's own id rather than the
+thread's actual id, which would have reset/fragmented the thread on the
+second reply onward; it now inherits `doc["thread_id"]` (falling back to
+the target's message_id only if unset). Outbound replies also now send a
+proper `References` chain (existing chain + the message being replied to,
+not just the direct parent) — needed both for the recipient's own client
+to thread correctly and for our own header-matching to find a match later
+even when an intermediate message was never stored.
+
+**A real poche gotcha found and worked around while building this**:
+`<`/`>` characters in an equality (`=`) `where=` clause value break
+matching entirely — confirmed against a live instance: a literal exact
+value with no other special characters returned 0 results. Since every
+Message-ID is `<...>`-wrapped per RFC 5322, this would have silently
+broken thread lookups completely. `~=` (contains) works fine with the
+same characters, so both `findThreadIDByMessageID` and the new `/thread`
+endpoint's `messagesInThread` (messages.go) query with `~=` and then
+verify the EXACT value in Go before trusting a match — a substring hit
+alone isn't proof, just a candidate.
+
+New endpoint: `GET /api/messages/:id/thread` — every message sharing that
+message's `thread_id` within the same mailbox (ownership-scoped like the
+other message endpoints above), oldest first. UI: `ThreadStrip`
+(components-pane.jsx) renders a compact conversation list right in the
+message pane, above the body — one line per thread message
+(direction-aware from/to label, preview, date), the currently-open one
+highlighted; clicking any other one calls the existing `setSelected`, so
+it loads through the same path a normal inbox click does (no separate
+code path to keep in sync). Only renders once there are 2+ messages in the
+thread.
+
+**Known limitation, not fixed here**: a fresh Compose (not a reply) never
+captures the Message-ID Resend assigns to the sent email — doing so would
+need an extra `GET /emails/:id` call after sending. If a recipient replies
+to a compose-initiated email, that reply currently starts a new thread in
+our system rather than joining the original, since we have nothing to
+match its In-Reply-To against. The reply flow (by far the common case —
+"I replied to a received email and got a reply back") is unaffected.
+
+Verified: a real `extractMessageIDs` bug (comma-joined ids collapsing into
+one bogus token — RFC-standard is space-separated but this is seen in the
+wild) was caught by a permanent unit test in `sync_test.go`, not just
+manual testing. The `<`/`>` equality-matching gotcha was independently
+confirmed against a live poche instance (not assumed from reading poche's
+docs) by round-tripping a literal value through both `=` and `~=` and
+comparing result counts. End-to-end: seeded a real inbound message and its
+outbound reply (matching exactly what `reply.go` would produce — a real
+`POST /api/reply` call against this scratch rig reached the correct
+ownership/from-allowed checks but couldn't complete without a configured
+Resend key, same limitation the earlier format-support verification hit),
+confirmed `GET /api/messages/:id/thread` returns both messages correctly
+ordered, and confirmed in a real browser that the conversation strip
+renders both, highlights the active one, and clicking the other switches
+to it and loads its own full body.
+
 ## Compose formats (v0.3.3+)
 
 `POST /api/compose` takes `format`: `text` (default), `html`, or `markdown`.

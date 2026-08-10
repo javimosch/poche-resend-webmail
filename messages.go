@@ -142,6 +142,24 @@ func handleMessagesAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 200, map[string]any{"ok": true, "data": json.RawMessage(data)})
 			return
 		}
+		if len(parts) == 2 && parts[1] == "thread" {
+			// Scope to the MESSAGE's own mailbox, not the caller's: an admin
+			// token has no mbID of its own, and for a regular tenant this is
+			// identical to mbID (already verified == above) — just avoids a
+			// second branch for the admin case.
+			threadMbID := strField(doc, "mailbox_id")
+			threadID := strField(doc, "thread_id")
+			if threadID == "" {
+				threadID = id
+			}
+			items, err := messagesInThread(p, threadMbID, threadID)
+			if err != nil {
+				writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
+				return
+			}
+			writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"items": items, "total": len(items)}})
+			return
+		}
 	}
 	writeJSON(w, 405, map[string]any{"ok": false, "error": "method/path"})
 }
@@ -249,6 +267,42 @@ func handleAttachmentOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 404, map[string]any{"ok": false, "error": "no content stored for this attachment"})
+}
+
+// messagesInThread returns every message sharing threadID within a mailbox,
+// oldest first — the whole conversation, received and sent, so the UI can
+// show it without switching between Inbox and Sent. Like
+// findThreadIDByMessageID (sync.go), this uses `~=` (contains) rather than
+// `=`: a "<...>"-wrapped thread_id breaks poche's equality matching
+// entirely, `~=` doesn't. Filters for the exact value in Go afterward
+// rather than trusting the substring match alone.
+func messagesInThread(p *Poche, mailboxID, threadID string) ([]map[string]any, error) {
+	data, err := p.List("messages", "mailbox_id="+mailboxID+",thread_id~="+threadID, 200, 0, "created_at", false)
+	if err != nil {
+		return nil, err
+	}
+	var page struct {
+		Items []struct {
+			ID  string          `json:"id"`
+			Doc json.RawMessage `json:"doc"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(data, &page); err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(page.Items))
+	for _, it := range page.Items {
+		doc := map[string]any{}
+		_ = json.Unmarshal(it.Doc, &doc)
+		if strField(doc, "thread_id") != threadID {
+			continue
+		}
+		out = append(out, map[string]any{"id": it.ID, "doc": doc})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return int64Field(out[i]["doc"].(map[string]any), "created_at") < int64Field(out[j]["doc"].(map[string]any), "created_at")
+	})
+	return out, nil
 }
 
 type facetValue struct {

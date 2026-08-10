@@ -167,6 +167,28 @@ func upsertInbound(p *Poche, mailboxID string, doc map[string]any) (created bool
 	// render path has to trust it.
 	html := sanitizeEmailHTML(strField(doc, "html"))
 	mid := strField(doc, "message_id")
+	// Thread continuity: Resend's inbound payload carries the raw email's
+	// In-Reply-To/References headers, but until now nothing read them, so
+	// every inbound message (including a reply-back to something WE sent)
+	// got thread_id = its own message_id — never joining the conversation
+	// it was actually part of. If the referenced message is one we already
+	// have, adopt ITS thread_id (checking In-Reply-To first — the direct
+	// parent — then References, most recent first, for the case where the
+	// direct parent was never stored but an earlier ancestor was).
+	inReplyTo := headerVal(doc, "in-reply-to")
+	references := headerVal(doc, "references")
+	threadID := mid
+	candidates := extractMessageIDs(inReplyTo)
+	refIDs := extractMessageIDs(references)
+	for i := len(refIDs) - 1; i >= 0; i-- {
+		candidates = append(candidates, refIDs[i])
+	}
+	for _, cand := range candidates {
+		if tid, ok := findThreadIDByMessageID(p, mailboxID, cand); ok {
+			threadID = tid
+			break
+		}
+	}
 	preview := text
 	if len(preview) > 160 {
 		preview = preview[:160]
@@ -189,15 +211,15 @@ func upsertInbound(p *Poche, mailboxID string, doc map[string]any) (created bool
 		"body_html":      html,
 		"html_sanitized": true,
 		"search_text":    search,
-		"thread_id":      mid,
+		"thread_id":      threadID,
 		"unread":         true,
 		"starred":        false,
 		"resend_id":      resendID,
 		"message_id":     mid,
 		"received_for":   rf,
 		"direction":      "in",
-		"in_reply_to":    "",
-		"references":     "",
+		"in_reply_to":    inReplyTo,
+		"references":     references,
 		"created_at":     createdAt,
 	}
 	raw, err := p.Create("messages", msg)
@@ -306,6 +328,81 @@ func upsertAttachments(p *Poche, messageID string, doc map[string]any) error {
 func strField(m map[string]any, k string) string {
 	v, _ := m[k].(string)
 	return v
+}
+
+// headerVal reads a raw email header from Resend's inbound payload
+// (doc["headers"] is a flat map of lowercased header names to string
+// values — confirmed against a real captured payload, not assumed).
+func headerVal(doc map[string]any, key string) string {
+	h, _ := doc["headers"].(map[string]any)
+	if h == nil {
+		return ""
+	}
+	v, _ := h[key].(string)
+	return v
+}
+
+// extractMessageIDs pulls every "<...>"-wrapped Message-ID out of a raw
+// In-Reply-To or References header value. RFC 5322 says these are
+// space-separated, but scanning for "<...>" pairs directly (rather than
+// splitting on whitespace) also copes with servers that comma-join them or
+// omit separators entirely — both seen in the wild.
+func extractMessageIDs(s string) []string {
+	var out []string
+	for {
+		start := strings.IndexByte(s, '<')
+		if start < 0 {
+			break
+		}
+		end := strings.IndexByte(s[start:], '>')
+		if end < 0 {
+			break
+		}
+		out = append(out, s[start:start+end+1])
+		s = s[start+end+1:]
+	}
+	return out
+}
+
+// findThreadIDByMessageID looks up the thread_id of an existing message by
+// its RFC822 message_id, scoped to a mailbox (a reply should only ever join
+// a thread already owned by the same mailbox). Returns ok=false if nothing
+// matches — the caller then starts a new thread rather than guessing.
+func findThreadIDByMessageID(p *Poche, mailboxID, msgID string) (string, bool) {
+	if msgID == "" {
+		return "", false
+	}
+	// A "<...>"-wrapped Message-ID breaks poche's `=` equality matching
+	// entirely (confirmed against a real instance — 0 results even for a
+	// literal exact value, no other special chars involved). `~=` (substring)
+	// works fine with the same characters, so this uses that plus an exact
+	// check in Go once the candidates are back, rather than trusting the
+	// substring match alone.
+	data, err := p.List("messages", "mailbox_id="+mailboxID+",message_id~="+msgID, 5, 0, "", false)
+	if err != nil {
+		return "", false
+	}
+	var page struct {
+		Items []struct {
+			Doc json.RawMessage `json:"doc"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(data, &page); err != nil {
+		return "", false
+	}
+	for _, it := range page.Items {
+		doc := map[string]any{}
+		_ = json.Unmarshal(it.Doc, &doc)
+		if strField(doc, "message_id") != msgID {
+			continue
+		}
+		tid := strField(doc, "thread_id")
+		if tid == "" {
+			tid = msgID
+		}
+		return tid, true
+	}
+	return "", false
 }
 
 // emailFromValue extracts an email address from Resend's object/array format:

@@ -100,6 +100,14 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride, format 
 		subj = reSubject(fmt.Sprint(doc["subject"]))
 	}
 	mid, _ := doc["message_id"].(string)
+	// Continue the mailbox's own thread_id, not the specific message being
+	// replied to: if you reply to the 3rd message in a conversation, the
+	// new message must join the SAME thread everything else is in, not
+	// start grouping around message #3's own id.
+	threadID, _ := doc["thread_id"].(string)
+	if threadID == "" {
+		threadID = mid
+	}
 	textPart, htmlPart, err := renderBody(text, format)
 	if err != nil {
 		return nil, fmt.Errorf("render %s body: %w", normalizeFormat(format), err)
@@ -116,10 +124,16 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride, format 
 	if htmlPart != "" {
 		payload["html"] = htmlPart
 	}
+	// References carries the whole ancestor chain (RFC 5322), not just the
+	// direct parent — needed for the recipient's own mail client to thread
+	// correctly, and for our own findThreadIDByMessageID (sync.go) to find
+	// a match even when the direct parent was never stored.
+	existingRefs, _ := doc["references"].(string)
+	refs := strings.TrimSpace(existingRefs + " " + mid)
 	if mid != "" {
 		payload["headers"] = map[string]string{
 			"In-Reply-To": mid,
-			"References":  mid,
+			"References":  refs,
 		}
 	}
 	re := resendForMailbox(mb)
@@ -139,7 +153,7 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride, format 
 		"body_html":      htmlPart,
 		"html_sanitized": true,
 		"search_text":    strings.ToLower(subj + " " + from + " " + to + " " + textPart),
-		"thread_id":      mid,
+		"thread_id":      threadID,
 		"unread":         false,
 		"starred":        false,
 		"resend_id":      sentID,
@@ -147,7 +161,7 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride, format 
 		"received_for":   from,
 		"direction":      "out",
 		"in_reply_to":    mid,
-		"references":     mid,
+		"references":     refs,
 		"created_at":     time.Now().UnixMilli(),
 	}
 	_, err = p.Create("messages", outDoc)

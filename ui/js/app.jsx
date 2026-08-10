@@ -31,6 +31,7 @@ function App() {
   const [msg, setMsg] = useState(null);
   const [msgTags, setMsgTags] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const [thread, setThread] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
@@ -176,6 +177,7 @@ function App() {
       setMsg(null);
       setMsgTags([]);
       setAttachments([]);
+      setThread([]);
       return;
     }
     apiFetch(token, "/api/messages/" + encodeURIComponent(selected))
@@ -186,6 +188,7 @@ function App() {
       })
       .catch((e) => console.error(e));
     loadMsgMeta(selected);
+    fetchThread(token, selected).then(setThread);
   }, [token, selected]);
 
   const refreshAfter = () => {
@@ -193,7 +196,10 @@ function App() {
     setSelectAllPages(false);
     loadList();
     loadUnread();
-    if (selected) loadMsgMeta(selected);
+    if (selected) {
+      loadMsgMeta(selected);
+      fetchThread(token, selected).then(setThread);
+    }
     apiFetch(token, "/api/status")
       .then((d) => setStatus(d))
       .catch(() => {});
@@ -393,6 +399,8 @@ function App() {
       msg={msg}
       msgTags={msgTags}
       attachments={attachments}
+      thread={thread}
+      onSelectMessage={setSelected}
       token={token}
       archived={msgTags.includes("archive") || view === "archive"}
       busy={busy}

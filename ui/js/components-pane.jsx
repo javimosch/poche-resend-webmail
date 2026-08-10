@@ -1,3 +1,40 @@
+// Gmail-style conversation strip: every message that shares this one's
+// thread_id (received AND sent, see reply.go/sync.go for how that's kept
+// consistent across a reply round-trip), so you don't have to switch
+// between Inbox and Sent to see the whole back-and-forth. Only renders
+// once there's actually more than one message to show.
+function ThreadStrip({ thread, current, onSelect, lang }) {
+  const { t } = useI18n();
+  if (!thread || thread.length < 2) return null;
+  return (
+    <div className="border-b border-paper-line max-h-40 overflow-y-auto scrollbar-thin">
+      {thread.map((m) => {
+        const active = current && m.id === current.id;
+        return (
+          <button
+            key={m.id}
+            onClick={() => onSelect(m.id)}
+            className={
+              "w-full text-left px-6 py-1.5 flex items-baseline gap-2 text-xs border-l-2 " +
+              (active
+                ? "border-l-accent bg-accent-soft text-ink"
+                : "border-l-transparent text-ink-muted hover:bg-paper-line/40")
+            }
+          >
+            <span className={"shrink-0 " + (m.unread ? "font-semibold" : "")}>
+              {m.direction === "out" ? t("to_prefix", m.to_addr || "") : m.from_addr}
+            </span>
+            <span className="truncate flex-1 min-w-0 text-ink-dim">{m.preview}</span>
+            <span className="shrink-0 font-mono tabular-nums text-ink-dim">
+              {formatWhen(m.created_at, lang)}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function MessagePane({
   msg,
   msgTags,
@@ -15,6 +52,8 @@ function MessagePane({
   addresses,
   catchallDomain,
   seenAddresses,
+  thread,
+  onSelectMessage,
   onBack,
 }) {
   const { t, lang } = useI18n();
@@ -181,6 +220,7 @@ function MessagePane({
           </button>
         </div>
       </header>
+      <ThreadStrip thread={thread} current={msg} onSelect={onSelectMessage} lang={lang} />
       <div
         className={"flex-1 overflow-y-auto scrollbar-thin px-6 py-5 prose-mail text-ink-muted leading-relaxed" + bodyClass}
         dangerouslySetInnerHTML={{ __html: html }}

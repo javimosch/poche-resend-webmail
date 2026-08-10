@@ -30,6 +30,8 @@ function AppLayout({
   msg,
   msgTags,
   attachments,
+  thread,
+  onSelectMessage,
   token,
   archived,
   busy,
@@ -179,6 +181,8 @@ function AppLayout({
           msg={msg}
           msgTags={msgTags}
           attachments={attachments}
+          thread={thread}
+          onSelectMessage={onSelectMessage}
           token={token}
           archived={archived}
           busy={busy}
