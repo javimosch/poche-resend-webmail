@@ -56,6 +56,8 @@ function AppLayout({
   composeMinimized,
   setComposeMinimized,
   sendAddresses,
+  sendCatchallDomain,
+  sendSeenAddresses,
   onCompose,
 }) {
   const { t } = useI18n();
@@ -197,6 +199,8 @@ function AppLayout({
         setMinimized={setComposeMinimized}
         onSend={onCompose}
         addresses={sendAddresses}
+        catchallDomain={sendCatchallDomain}
+        seenAddresses={sendSeenAddresses}
         defaultFrom={account?.address || (sendAddresses || [])[0] || ""}
         token={token}
         busy={busy}

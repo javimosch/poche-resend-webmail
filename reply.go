@@ -54,15 +54,7 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride string) 
 	if mbID != "" {
 		mb, _ = getMailboxByID(pForAddr, mbID)
 	}
-	isMailboxAddr := false
-	if mb != nil {
-		for _, a := range mailboxAllAddresses(pForAddr, mb) {
-			if strings.EqualFold(a, from) {
-				isMailboxAddr = true
-				break
-			}
-		}
-	}
+	isMailboxAddr := mb != nil && mailboxOwnsAddress(pForAddr, mb, from)
 	if from == "" || !fromAllowed(from) || (mb != nil && !isMailboxAddr) {
 		if mb != nil && fromAllowed(mb.Address) {
 			from = mb.Address
@@ -71,17 +63,8 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride string) 
 	if from == "" || !fromAllowed(from) {
 		return nil, fmt.Errorf("from not allowed (set MAIL_FROM_ALLOWLIST): %s", from)
 	}
-	if mb != nil {
-		found := false
-		for _, a := range mailboxAllAddresses(pForAddr, mb) {
-			if strings.EqualFold(a, from) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nil, fmt.Errorf("from address %s does not belong to this mailbox", from)
-		}
+	if mb != nil && !mailboxOwnsAddress(pForAddr, mb, from) {
+		return nil, fmt.Errorf("from address %s does not belong to this mailbox", from)
 	}
 	to := toOverride
 	if to == "" {

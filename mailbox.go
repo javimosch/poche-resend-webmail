@@ -135,6 +135,26 @@ func emailDomain(addr string) string {
 	return domain
 }
 
+// mailboxOwnsAddress reports whether addr is one this mailbox may send/reply
+// as: its own primary address or alias, OR — for a catch-all mailbox — any
+// address at all under its claimed domain. Without the second branch, a
+// catch-all mailbox (e.g. admin@intrane.fr receiving mail for the whole
+// intrane.fr domain, see the catch-all feature above) could only ever
+// reply as its own literal address, never as the address a message was
+// actually received at, defeating the point of a domain-wide inbox.
+func mailboxOwnsAddress(p *Poche, mb *mailboxRecord, addr string) bool {
+	if mb == nil || addr == "" {
+		return false
+	}
+	addr = strings.ToLower(strings.TrimSpace(addr))
+	for _, a := range mailboxAllAddresses(p, mb) {
+		if strings.EqualFold(a, addr) {
+			return true
+		}
+	}
+	return mb.CatchallDomain != "" && emailDomain(addr) == mb.CatchallDomain
+}
+
 func listAllMailboxes(p *Poche) ([]mailboxRecord, error) {
 	data, err := p.List("mailboxes", "", 10000, 0, "", false)
 	if err != nil {

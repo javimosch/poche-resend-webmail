@@ -104,6 +104,7 @@ const I18N = {
     add_account_title: "Add another account",
     cancel_add_account: "← Cancel, back to my inbox",
     sign_out_one: (a) => "Sign out of " + a,
+    catchall_from_hint: (d) => "This mailbox can send as any address @" + d,
 
     // message pane
     select_message: "Select a message",
@@ -263,6 +264,7 @@ const I18N = {
     add_account_title: "Ajouter un autre compte",
     cancel_add_account: "← Annuler, retour à ma boîte",
     sign_out_one: (a) => "Se déconnecter de " + a,
+    catchall_from_hint: (d) => "Cette boîte peut envoyer depuis n'importe quelle adresse @" + d,
 
     select_message: "Sélectionnez un message",
     from: "De",

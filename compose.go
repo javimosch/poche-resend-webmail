@@ -105,18 +105,10 @@ func composeMessage(mbID string, isAdmin bool, req composeReq) (map[string]any, 
 	// Default the sender to the mailbox primary address, then verify the
 	// chosen address actually belongs to this mailbox (primary or alias).
 	if mb != nil {
-		addrs := mailboxAllAddresses(p, mb)
 		if from == "" {
 			from = mb.Address
 		}
-		owned := false
-		for _, a := range addrs {
-			if strings.EqualFold(a, from) {
-				owned = true
-				break
-			}
-		}
-		if !owned {
+		if !mailboxOwnsAddress(p, mb, from) {
 			return nil, fmt.Errorf("from address %s does not belong to this mailbox", from)
 		}
 		if !mb.IsActive {
@@ -258,10 +250,27 @@ func handleMailboxAddressesAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 404, map[string]any{"ok": false, "error": "mailbox not found"})
 		return
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{
+	resp := map[string]any{
 		"addresses": mailboxAllAddresses(p, mb),
 		"primary":   mb.Address,
-	}})
+	}
+	// A catch-all mailbox (see mailboxOwnsAddress) may send/reply as ANY
+	// address at its domain, not just its own primary+aliases — that set is
+	// unbounded, so the UI can't offer a fixed dropdown of it. Tell it the
+	// domain (so it can offer free-text entry) plus, as a convenience, the
+	// addresses this mailbox has actually received mail at so far — a
+	// starting point, not the full set of what's allowed.
+	if mb.CatchallDomain != "" {
+		resp["catchall_domain"] = mb.CatchallDomain
+		if seen, _, err := messageFieldFacets(p, mb.ID, "to_addr"); err == nil {
+			addrs := make([]string, 0, len(seen))
+			for _, f := range seen {
+				addrs = append(addrs, f.Value)
+			}
+			resp["seen_addresses"] = addrs
+		}
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "data": resp})
 }
 
 // parseAddrList accepts []string, a comma/semicolon separated string, or nil.

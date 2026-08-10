@@ -138,9 +138,10 @@ function MarkdownSplitEditor({ value, onChange, token, placeholder, fieldClass }
   );
 }
 
-function ComposeModal({ open, onClose, minimized, setMinimized, onSend, addresses, defaultFrom, busy, token }) {
+function ComposeModal({ open, onClose, minimized, setMinimized, onSend, addresses, catchallDomain, seenAddresses, defaultFrom, busy, token }) {
   const { t } = useI18n();
   const [from, setFrom] = React.useState(defaultFrom || "");
+  const wasOpen = React.useRef(false);
   const [to, setTo] = React.useState("");
   const [cc, setCc] = React.useState("");
   const [bcc, setBcc] = React.useState("");
@@ -161,10 +162,23 @@ function ComposeModal({ open, onClose, minimized, setMinimized, onSend, addresse
   const [sent, setSent] = React.useState("");
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpen.current = false;
+      return;
+    }
     setError("");
     setSent("");
-    setFrom((prev) => prev || defaultFrom || (addresses || [])[0] || "");
+    // Only reset From on a fresh open (the false→true transition), not on
+    // every re-render while already open — otherwise the account switcher
+    // (or any other prop change) would clobber mid-compose edits. But it
+    // MUST always reset on open, not just fill when empty: this component
+    // stays mounted across account switches, so an unconditional "keep if
+    // already set" here left From stuck on whichever account composed
+    // last, even after switching to a different logged-in mailbox.
+    if (!wasOpen.current) {
+      setFrom(defaultFrom || (addresses || [])[0] || "");
+    }
+    wasOpen.current = true;
   }, [open, defaultFrom, addresses]);
 
   if (!open) return null;
@@ -341,7 +355,24 @@ function ComposeModal({ open, onClose, minimized, setMinimized, onSend, addresse
         <div className="px-5 py-4 space-y-3 overflow-y-auto scrollbar-thin flex-1">
           <label className="block">
             <span className="text-[0.7rem] uppercase tracking-wider text-ink-dim">{t("from")}</span>
-            {(addresses || []).length > 1 ? (
+            {catchallDomain ? (
+              <React.Fragment>
+                <input
+                  type="text"
+                  list="compose-from-suggestions"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  placeholder={"anything@" + catchallDomain}
+                  className={field}
+                />
+                <datalist id="compose-from-suggestions">
+                  {Array.from(new Set([...(addresses || []), ...(seenAddresses || [])])).map((a) => (
+                    <option key={a} value={a} />
+                  ))}
+                </datalist>
+                <span className="text-[0.7rem] text-ink-dim">{t("catchall_from_hint", catchallDomain)}</span>
+              </React.Fragment>
+            ) : (addresses || []).length > 1 ? (
               <select value={from} onChange={(e) => setFrom(e.target.value)} className={field}>
                 {(addresses || []).map((a) => (
                   <option key={a} value={a}>

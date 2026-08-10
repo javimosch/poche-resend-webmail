@@ -494,6 +494,59 @@ account persisted, signed out of the active one and confirmed it fell back
 to the other (not the login screen), then signed out of the last one and
 confirmed only then did the login screen appear.
 
+## Send/reply-as for catch-all mailboxes (2026-08-10)
+
+The switcher above surfaced a real bug + a real gap, both fixed together:
+
+- **Bug**: `ComposeModal` (components-compose.jsx) kept its `from` field in
+  `React.useState`, seeded once from the `defaultFrom` prop and only ever
+  refilled when empty (`prev || defaultFrom || ...`). Since the modal stays
+  mounted across account switches (it's always in the tree, just hidden),
+  switching accounts and opening Compose showed the PREVIOUS account's
+  address, not the new one. Fixed by tracking the `open` prop's false→true
+  transition (a `wasOpen` ref) and unconditionally resetting `from` on
+  every fresh open — but not on re-renders while already open, so an
+  in-progress edit isn't clobbered by an unrelated prop change.
+- **Gap**: a catch-all mailbox (e.g. `admin@intrane.fr` receiving all of
+  `@intrane.fr`, see above) could still only send/reply as its own literal
+  address — `mailboxAllAddresses` only returns primary+aliases, so
+  replying to a message received at `javi@intrane.fr` fell back to
+  `admin@intrane.fr` instead of replying AS `javi@intrane.fr`, defeating
+  the point of a domain-wide inbox ("manage all @intrane.fr mail and reply
+  back" was the explicit ask).
+
+Fixed with one shared helper, `mailboxOwnsAddress(p, mb, addr)`
+(mailbox.go): true for the mailbox's own primary/alias addresses, OR any
+address at all under `mb.CatchallDomain`. Used in three places that each
+had their own duplicated ownership loop before: `reply.go` (both the
+"is the derived from address ours" check AND the final send-time
+validation), and `compose.go`'s new-email validation. Reply's existing
+`received_for`/`to_addr` → mailbox-primary fallback chain (already
+correct in spirit) just needed this widened definition of "ours" to work
+right for a catch-all mailbox — no other reply.go logic changed.
+
+Compose UI: `GET /api/mailbox/addresses` now also returns
+`catchall_domain` (when set) and `seen_addresses` (the mailbox's own
+`to_addr` facet — reuses `messageFieldFacets` from the address-badge
+feature above — as a convenience suggestion list, not the full set of
+what's allowed). When `catchall_domain` is present, the Compose From field
+becomes a free-text input with a `<datalist>` of known addresses instead
+of the closed dropdown/fixed-text used everywhere else, with a hint
+("This mailbox can send as any address @domain"). Validation is
+server-side via the same `mailboxOwnsAddress` — the datalist is a
+convenience, not the enforcement boundary.
+
+Verified in a real browser + curl: switching from contact@lacure.enbauges.fr
+to admin@intrane.fr and opening Compose now shows admin@intrane.fr (not
+the stale address); the From field is a free-text combobox with the
+correct hint; typing an arbitrary `@intrane.fr` address passes validation
+(fails only at the unconfigured-Resend-key step in the test rig, past the
+ownership check); an address outside the domain is correctly rejected with
+"does not belong to this mailbox"; replying to a message received at
+javi@intrane.fr from the admin@intrane.fr mailbox passes ownership
+validation as javi@intrane.fr (previously would have silently fallen back
+to admin@intrane.fr).
+
 ## Compose formats (v0.3.3+)
 
 `POST /api/compose` takes `format`: `text` (default), `html`, or `markdown`.

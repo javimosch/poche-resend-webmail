@@ -349,8 +349,12 @@ function composeMail(token, body) {
 
 function fetchSendAddresses(token) {
   return apiFetch(token, "/api/mailbox/addresses")
-    .then((d) => d.addresses || [])
-    .catch(() => []);
+    .then((d) => ({
+      addresses: d.addresses || [],
+      catchallDomain: d.catchall_domain || "",
+      seenAddresses: d.seen_addresses || [],
+    }))
+    .catch(() => ({ addresses: [], catchallDomain: "", seenAddresses: [] }));
 }
 
 function renderBodyPreview(token, text, format) {

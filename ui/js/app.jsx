@@ -40,6 +40,8 @@ function App() {
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeMinimized, setComposeMinimized] = useState(false);
   const [sendAddresses, setSendAddresses] = useState([]);
+  const [sendCatchallDomain, setSendCatchallDomain] = useState("");
+  const [sendSeenAddresses, setSendSeenAddresses] = useState([]);
   const pageSize = 50;
   const ctxRef = useRef({ view: "inbox", tagView: "", q: "" });
 
@@ -94,9 +96,15 @@ function App() {
   useEffect(() => {
     if (!token) {
       setSendAddresses([]);
+      setSendCatchallDomain("");
+      setSendSeenAddresses([]);
       return;
     }
-    fetchSendAddresses(token).then(setSendAddresses);
+    fetchSendAddresses(token).then((r) => {
+      setSendAddresses(r.addresses);
+      setSendCatchallDomain(r.catchallDomain);
+      setSendSeenAddresses(r.seenAddresses);
+    });
   }, [token]);
 
   useEffect(() => {
@@ -392,6 +400,8 @@ function App() {
       composeMinimized={composeMinimized}
       setComposeMinimized={setComposeMinimized}
       sendAddresses={sendAddresses}
+      sendCatchallDomain={sendCatchallDomain}
+      sendSeenAddresses={sendSeenAddresses}
       onCompose={onCompose}
     />
   );
