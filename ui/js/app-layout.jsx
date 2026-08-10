@@ -189,6 +189,9 @@ function AppLayout({
           onDelete={onDelete}
           onReply={onReply}
           account={account}
+          addresses={sendAddresses}
+          catchallDomain={sendCatchallDomain}
+          seenAddresses={sendSeenAddresses}
           onBack={onBack}
         />
       </main>

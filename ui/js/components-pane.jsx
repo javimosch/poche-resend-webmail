@@ -12,12 +12,22 @@ function MessagePane({
   archived,
   busy,
   account,
+  addresses,
+  catchallDomain,
+  seenAddresses,
   onBack,
 }) {
   const { t, lang } = useI18n();
   const [reply, setReply] = React.useState("");
+  // Same precedence the server falls back to (reply.go: received_for, then
+  // to_addr, then the mailbox's own address) — so what's shown here is what
+  // will actually be sent unless the user picks something else.
+  const defaultReplyFrom = (msg) =>
+    (msg && (msg.received_for || msg.to_addr)) || account?.address || (addresses || [])[0] || "";
+  const [replyFrom, setReplyFrom] = React.useState(() => defaultReplyFrom(msg));
   React.useEffect(() => {
     setReply("");
+    setReplyFrom(defaultReplyFrom(msg));
   }, [msg?.id]);
   if (!msg) {
     return (
@@ -140,13 +150,43 @@ function MessagePane({
           onSubmit={(e) => {
             e.preventDefault();
             if (!reply.trim() || busy) return;
-            onReply(reply.trim()).then(() => setReply(""));
+            onReply(reply.trim(), replyFrom).then(() => setReply(""));
           }}
         >
-          <div className="text-xs text-ink-dim">
+          <label className="block text-xs text-ink-dim">
             <span className="text-ink-dim/70">{t("from")} </span>
-            <span className="text-ink">{account?.address || msg.received_for || msg.to_addr || "—"}</span>
-          </div>
+            {catchallDomain ? (
+              <React.Fragment>
+                <input
+                  type="text"
+                  list="reply-from-suggestions"
+                  value={replyFrom}
+                  onChange={(e) => setReplyFrom(e.target.value)}
+                  placeholder={"anything@" + catchallDomain}
+                  className="mt-1 w-full bg-paper border border-paper-line rounded px-2 py-1 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-accent"
+                />
+                <datalist id="reply-from-suggestions">
+                  {Array.from(new Set([...(addresses || []), ...(seenAddresses || [])])).map((a) => (
+                    <option key={a} value={a} />
+                  ))}
+                </datalist>
+              </React.Fragment>
+            ) : (addresses || []).length > 1 ? (
+              <select
+                value={replyFrom}
+                onChange={(e) => setReplyFrom(e.target.value)}
+                className="mt-1 bg-paper border border-paper-line rounded px-2 py-1 text-sm text-ink"
+              >
+                {(addresses || []).map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-ink">{replyFrom || "—"}</span>
+            )}
+          </label>
           <textarea
             value={reply}
             onChange={(e) => setReply(e.target.value)}

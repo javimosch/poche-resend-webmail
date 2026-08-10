@@ -24,6 +24,24 @@ func handleReplyAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"ok": false, "error": "id and text required"})
 		return
 	}
+	// A message id alone must not let one tenant reply as another: without
+	// this, replyMessage derives its Resend credentials purely from the
+	// TARGET message's own mailbox, so any signed-in tenant could send mail
+	// through a different tenant's Resend account just by supplying its
+	// message id. Same class of gap as handleAttachmentOpen already guards.
+	if !authIsAdmin(r) {
+		p := newPocheFromEnv()
+		doc, err := loadDoc(p, req.ID)
+		if err != nil {
+			writeJSON(w, 404, map[string]any{"ok": false, "error": "message not found"})
+			return
+		}
+		mbID := authMailboxID(r)
+		if mbID == "" || strField(doc, "mailbox_id") != mbID {
+			writeJSON(w, 403, map[string]any{"ok": false, "error": "forbidden"})
+			return
+		}
+	}
 	data, err := replyMessage(req.ID, req.Text, req.From, req.To, req.Subject)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})

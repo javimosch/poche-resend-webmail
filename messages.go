@@ -95,6 +95,14 @@ func handleMessagesAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 404, map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
+		// A message id alone must not grant access: without this, any
+		// signed-in tenant could star (and, worse, on the GET paths below,
+		// read) another tenant's mail just by guessing or replaying an id —
+		// the same class of gap handleAttachmentOpen already guards against.
+		if !isAdmin && (mbID == "" || strField(doc, "mailbox_id") != mbID) {
+			writeJSON(w, 403, map[string]any{"ok": false, "error": "forbidden"})
+			return
+		}
 		star, _ := doc["starred"].(bool)
 		star = !star
 		doc["starred"] = star
@@ -107,6 +115,15 @@ func handleMessagesAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) >= 1 && parts[0] != "" && r.Method == http.MethodGet {
 		id := parts[0]
+		doc, err := loadDoc(p, id)
+		if err != nil {
+			writeJSON(w, 404, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		if !isAdmin && (mbID == "" || strField(doc, "mailbox_id") != mbID) {
+			writeJSON(w, 403, map[string]any{"ok": false, "error": "forbidden"})
+			return
+		}
 		if len(parts) == 1 {
 			data, err := p.Get("messages", id)
 			if err != nil {

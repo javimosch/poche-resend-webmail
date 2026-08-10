@@ -137,6 +137,11 @@ function App() {
   }, [token, view, tagView, q, offset, addrField, addrValue]);
 
   useEffect(() => {
+    // token is in these deps too: without it, switching accounts kept
+    // whatever message id was selected under the PREVIOUS account and
+    // re-fetched it under the new one's token — at best a 403 now that
+    // messages.go checks mailbox ownership, at worst (before that fix) a
+    // cross-tenant read.
     setSelected(null);
     setMsg(null);
     setMsgTags([]);
@@ -144,7 +149,7 @@ function App() {
     setOffset(0);
     setChecked([]);
     setSelectAllPages(false);
-  }, [view, tagView, q, addrField, addrValue]);
+  }, [token, view, tagView, q, addrField, addrValue]);
 
   useEffect(() => {
     loadList();
@@ -287,12 +292,12 @@ function App() {
       .finally(() => setBusy(false));
   };
 
-  const onReply = (text) => {
+  const onReply = (text, from) => {
     if (!msg) return Promise.resolve();
     setBusy(true);
     return apiFetch(token, "/api/reply", {
       method: "POST",
-      body: JSON.stringify({ id: msg.id, text }),
+      body: JSON.stringify({ id: msg.id, text, from: from || "" }),
     })
       .then(refreshAfter)
       .catch((e) => {
@@ -312,6 +317,19 @@ function App() {
       .finally(() => setBusy(false));
   };
 
+  // Clears whatever message/selection belonged to the PREVIOUS account
+  // synchronously, in the same click handler that changes the active
+  // account — batched into the same render as the token change, so the
+  // "fetch message by selected id" effect never fires with a stale id
+  // against the new account's token (which the server now correctly
+  // rejects with 403, but there's no reason to even ask).
+  const clearOpenMessage = () => {
+    setSelected(null);
+    setMsg(null);
+    setMsgTags([]);
+    setAttachments([]);
+  };
+
   if (err) return <div className="p-8 text-red-400">{t("config_error", err)}</div>;
   if (!cfg) return <div className="p-8 text-ink-muted">{t("booting")}</div>;
   if (!token || addingAccount) {
@@ -320,6 +338,7 @@ function App() {
         tokenInput={tokenInput}
         setTokenInput={setTokenInput}
         onAuthenticated={(tok, acct) => {
+          clearOpenMessage();
           addAccount(tok, acct);
           setAddingAccount(false);
           setAddress("");
@@ -389,12 +408,12 @@ function App() {
       account={account}
       accounts={accounts}
       activeKey={activeKey}
-      onSwitchAccount={switchAccount}
+      onSwitchAccount={(key) => { clearOpenMessage(); switchAccount(key); }}
       onAddAccount={() => { setAddress(""); setPassword(""); setLoginMode("password"); setAddingAccount(true); }}
-      onRemoveAccount={removeAccount}
+      onRemoveAccount={(key) => { if (key === activeKey) clearOpenMessage(); removeAccount(key); }}
       brand={account?.brand || cfg?.brand || "poche"}
       onBack={() => setSelected(null)}
-      onLogout={() => { removeAccount(activeKey); setPassword(""); }}
+      onLogout={() => { clearOpenMessage(); removeAccount(activeKey); setPassword(""); }}
       composeOpen={composeOpen}
       setComposeOpen={setComposeOpen}
       composeMinimized={composeMinimized}

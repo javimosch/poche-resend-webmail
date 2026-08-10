@@ -547,6 +547,61 @@ javi@intrane.fr from the admin@intrane.fr mailbox passes ownership
 validation as javi@intrane.fr (previously would have silently fallen back
 to admin@intrane.fr).
 
+## Reply From picker + a real cross-tenant IDOR fixed along the way (2026-08-10)
+
+Follow-up to the section above: reply had the same "catch-all mailbox
+should be able to choose the From" need as Compose, but the reply box only
+ever showed a static, non-editable line. Fixed: `MessagePane`
+(components-pane.jsx) now defaults reply `from` to the server's own
+precedence (`received_for` → `to_addr` → the mailbox's address), but shows
+it in the same free-text-with-datalist widget as Compose when
+`catchall_domain` is set (or a `<select>` when the mailbox has aliases,
+matching Compose's non-catch-all case). `onReply` now threads a `from`
+override through to `POST /api/reply`, which already accepted one.
+
+**While tracing message ownership to build the default correctly, three
+pre-existing, real cross-tenant authorization gaps turned up and were
+fixed in the same change** — not introduced by the switcher, but made
+trivially exploitable by it (two mailbox sessions live in one browser tab
+at once now):
+
+- `GET /api/messages/:id` and `GET /api/messages/:id/attachments`
+  (messages.go) had **no mailbox-ownership check at all** — any
+  authenticated mailbox could read any OTHER mailbox's message by id, and
+  `PUT /api/messages/:id/star` could mutate one too. Fixed the same way
+  `handleAttachmentOpen` already guards itself: load the doc, compare
+  `mailbox_id` against `authMailboxID(r)` for non-admin callers, 403 on
+  mismatch.
+- `handleBulkAPI` (bulk.go) never validated client-supplied `ids` for the
+  everyday per-message actions (star/archive/tag/**delete**) — only the
+  `all_pages`/`mark_read_all` path (which derives ids from a mailbox-scoped
+  query) was safe. A tenant could delete another tenant's mail by id. Fixed
+  with `filterIDsOwnedByMailbox`: silently drops any id that doesn't belong
+  to the caller's mailbox before acting (counts as a normal per-id failure,
+  no error shape change).
+- **The most severe**: `handleReplyAPI` (reply.go) never called
+  `authMailboxID(r)` at all — it derived the sending mailbox purely from
+  the TARGET message's own `mailbox_id`, so any authenticated tenant could
+  send outbound email through a DIFFERENT tenant's Resend account just by
+  supplying that tenant's message id. Fixed by checking the target
+  message's `mailbox_id` against the caller's before calling
+  `replyMessage`.
+
+None of these three needed `mailboxOwnsAddress` — they're a different,
+simpler check ("is this MY message at all", not "may I use this From").
+
+Verified with curl as two real logged-in mailboxes (not just code review):
+before the fix, cross-tenant read/star/reply/delete all succeeded silently;
+after, all four return 403 (delete: silently drops to `ok:0` matching the
+existing per-id failure shape) while the target message is confirmed
+still present and unmodified; same-tenant access to one's own messages is
+unaffected. Also fixed a related UX gap the account switcher exposed:
+switching accounts left whichever message was open selected under the old
+account, so it re-fetched under the new token and (now correctly) 403'd —
+clearing the open message is now synchronous with the account-switch click
+handler itself (not a reactive effect keyed on `token`), so the stale
+fetch never fires in the first place.
+
 ## Compose formats (v0.3.3+)
 
 `POST /api/compose` takes `format`: `text` (default), `html`, or `markdown`.

@@ -48,6 +48,14 @@ func handleBulkAPI(w http.ResponseWriter, r *http.Request) {
 		if req.Action == "mark_read_all" {
 			req.Action = "mark_read"
 		}
+	} else if !isAdmin {
+		// req.IDs here are client-supplied (the checked rows in the UI) and
+		// were NOT derived from a mailbox-scoped query like collectIDsLinked
+		// above — without this filter, any signed-in tenant could
+		// star/archive/tag/delete another tenant's mail by sending its ids
+		// directly, no guessing required once any two ids were ever visible
+		// in the same browser (e.g. via the account switcher).
+		ids = filterIDsOwnedByMailbox(p, ids, mbID)
 	}
 
 	// Destructive bulk actions are logged with who and how many: after a
@@ -342,6 +350,27 @@ func viewLinks(view, tagView string) (has, missing []string) {
 		missing = []string{linkArchive}
 	}
 	return
+}
+
+// filterIDsOwnedByMailbox drops any id whose message doesn't belong to mbID
+// (or that doesn't exist) — silently, so a caller's action just applies to
+// fewer ids rather than erroring, matching handleBulkAPI's existing
+// okN/failN counting for individual failures.
+func filterIDsOwnedByMailbox(p *Poche, ids []string, mbID string) []string {
+	if mbID == "" {
+		return nil
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		doc, err := loadDoc(p, id)
+		if err != nil {
+			continue
+		}
+		if strField(doc, "mailbox_id") == mbID {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 func collectIDsLinked(p *Poche, view, tagView, q string, mbID string, isAdmin bool) ([]string, error) {
