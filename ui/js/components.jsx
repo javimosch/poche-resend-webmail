@@ -1,4 +1,4 @@
-function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onRenameTag, onDeleteTag, onLogout, token, account, onComposeClick, brand, onCloseNav }) {
+function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onRenameTag, onDeleteTag, onLogout, token, account, accounts, activeKey, onSwitchAccount, onAddAccount, onRemoveAccount, onComposeClick, brand, onCloseNav }) {
   const { t } = useI18n();
   const [newTag, setNewTag] = React.useState("");
   const [tagBusy, setTagBusy] = React.useState(false);
@@ -94,13 +94,15 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
         </form>
       </nav>
       <div className="px-4 py-3 border-t border-paper-line text-[0.76rem] font-mono text-ink-dim space-y-2">
-        {account?.address && (
-          <div className="space-y-0.5">
-            <CopyAddress address={account.address} />
-            {account.name && account.name !== account.address && (
-              <div className="truncate" title={account.name}>{account.name}</div>
-            )}
-          </div>
+        {accounts && accounts.length > 0 && (
+          <AccountSwitcher
+            account={account}
+            accounts={accounts}
+            activeKey={activeKey}
+            onSwitch={onSwitchAccount}
+            onAdd={onAddAccount}
+            onRemove={onRemoveAccount}
+          />
         )}
         <div>{t("in_view", total)}</div>
         {status && status.poche_ok === false && (
@@ -119,6 +121,96 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
         )}
       </div>
     </aside>
+  );
+}
+
+// Proton-style account switcher: click the current account to open a list
+// of every other locally logged-in mailbox and switch instantly (no
+// network round trip, the session token is already cached) — plus "add
+// account" to log into another one without losing this one. Signing into a
+// second mailbox used to silently overwrite the first one's session; this
+// is what fixes that.
+function AccountSwitcher({ account, accounts, activeKey, onSwitch, onAdd, onRemove }) {
+  const { t } = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const [copyState, setCopyState] = React.useState("");
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const label = (a) => a.name && a.name !== a.address ? a.name : (a.address || t("token_title"));
+
+  const copyAddress = (e) => {
+    e.stopPropagation();
+    if (!account?.address) return;
+    copyToClipboard(account.address)
+      .then(() => setCopyState(t("copied")))
+      .catch(() => setCopyState(t("copy_blocked")))
+      .finally(() => setTimeout(() => setCopyState(""), 1800));
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="flex-1 min-w-0 flex items-center justify-between gap-2 text-left hover:text-accent"
+          title={t("switch_account")}
+        >
+          <span className="truncate">{copyState || (account ? label(account) : t("token_title"))}</span>
+          <span className="shrink-0 text-ink-dim" aria-hidden="true">{open ? "▴" : "▾"}</span>
+        </button>
+        {account?.address && (
+          <button
+            onClick={copyAddress}
+            title={t("copy_address")}
+            className="shrink-0 text-ink-dim hover:text-accent px-1"
+          >
+            ⧉
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="absolute z-50 bottom-full mb-1 left-0 right-0 bg-paper-raised border border-paper-line rounded-md shadow-lg py-1 max-h-64 overflow-y-auto scrollbar-thin">
+          {accounts.map((a) => (
+            <div key={a.key} className="group flex items-center gap-1 px-1">
+              <button
+                className={
+                  "flex-1 min-w-0 text-left px-2 py-1.5 rounded text-xs truncate " +
+                  (a.key === activeKey ? "text-accent font-semibold" : "text-ink-muted hover:text-ink")
+                }
+                onClick={() => { onSwitch(a.key); setOpen(false); }}
+                title={a.address || t("token_title")}
+              >
+                {label(a)}
+              </button>
+              <button
+                className="opacity-0 group-hover:opacity-100 shrink-0 px-1.5 text-ink-dim hover:text-accent text-xs"
+                title={t("sign_out_one", label(a))}
+                onClick={(e) => { e.stopPropagation(); onRemove(a.key); }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <div className="border-t border-paper-line mt-1 pt-1">
+            <button
+              className="w-full text-left px-2 py-1.5 rounded text-xs text-accent hover:bg-accent-soft"
+              onClick={() => { onAdd(); setOpen(false); }}
+            >
+              + {t("add_account")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -491,22 +583,3 @@ function TagRow({ name, count, active, navBtn, label, onOpen, onRename, onDelete
   );
 }
 
-function CopyAddress({ address }) {
-  const { t } = useI18n();
-  const [state, setState] = React.useState("");
-  const copy = () => {
-    copyToClipboard(address)
-      .then(() => setState(t("copied")))
-      .catch(() => setState(t("copy_blocked")))
-      .finally(() => setTimeout(() => setState(""), 1800));
-  };
-  return (
-    <button
-      onClick={copy}
-      title={t("copy_address")}
-      className={"w-full text-left truncate hover:text-accent " + (state ? "text-accent" : "text-ink-muted")}
-    >
-      {state || address}
-    </button>
-  );
-}

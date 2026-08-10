@@ -98,6 +98,13 @@ const I18N = {
     filter_value_option: (a, n) => a + " (" + n + ")",
     sent_to_badge: (a) => "sent to " + a,
 
+    // account switcher
+    switch_account: "Switch account",
+    add_account: "Add account",
+    add_account_title: "Add another account",
+    cancel_add_account: "← Cancel, back to my inbox",
+    sign_out_one: (a) => "Sign out of " + a,
+
     // message pane
     select_message: "Select a message",
     from: "From",
@@ -250,6 +257,12 @@ const I18N = {
     filter_value_placeholder: "Choisir une adresse…",
     filter_value_option: (a, n) => a + " (" + n + ")",
     sent_to_badge: (a) => "envoyé à " + a,
+
+    switch_account: "Changer de compte",
+    add_account: "Ajouter un compte",
+    add_account_title: "Ajouter un autre compte",
+    cancel_add_account: "← Annuler, retour à ma boîte",
+    sign_out_one: (a) => "Se déconnecter de " + a,
 
     select_message: "Sélectionnez un message",
     from: "De",

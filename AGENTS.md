@@ -457,6 +457,43 @@ readably.
 
 Adding a language = one more block in `I18N` plus its code in `LANGS`.
 
+## Account switcher (2026-08-10)
+
+Multiple mailbox logins now coexist client-side, Proton-style — logging
+into a second mailbox used to silently overwrite `webmail_token`/
+`webmail_account` in localStorage, so switching accounts meant losing the
+first one's session entirely. That was a real problem once one mailbox
+(e.g. the intrane.fr catch-all, see above) is a completely different login
+from another (e.g. contact@lacure.enbauges.fr).
+
+Storage moved from two single-slot keys to one list, `webmail_accounts`
+(`ui/js/api.jsx`): `[{key, token, address, name, brand}, ...]` plus
+`webmail_active_key` for which one is current. `key` is the mailbox address
+when known, or `token:<first-12-chars>` for a raw admin-token login where
+no address comes back from the server. `migrateLegacyAccount()` runs once
+on load and folds any pre-existing single-slot session (or a `?token=` URL
+param) into the new list — nobody already logged in is signed out by this
+change.
+
+Switching accounts (`useConfig().switchAccount`) is instant — no network
+call, since the target session's token is already cached locally and
+sessions last 7 days server-side (session.go). "Sign out" now means sign
+out of the ONE active account, not all of them: it removes that entry and
+falls back to whatever's left, or the login screen if none remain.
+
+UI: `AccountSwitcher` (components.jsx) replaces the old static address
+display in the sidebar footer — click it to open a dropdown of every
+locally logged-in account (with a ✕ to sign out any one of them) plus
+"+ Add account", which reopens `LoginForm` in an "Add another account"
+mode (a `onCancel` prop) without touching the accounts already logged in.
+
+Verified end-to-end in a real browser (Playwright): logged into two
+mailboxes, confirmed both appear in the switcher, switched between them
+with no re-authentication, reloaded the page and confirmed the active
+account persisted, signed out of the active one and confirmed it fell back
+to the other (not the login screen), then signed out of the last one and
+confirmed only then did the login screen appear.
+
 ## Compose formats (v0.3.3+)
 
 `POST /api/compose` takes `format`: `text` (default), `html`, or `markdown`.

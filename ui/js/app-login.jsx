@@ -1,4 +1,4 @@
-function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, setAddress, password, setPassword, loginMode, setLoginMode, loginError, setLoginError, resetToken, setResetToken, setResetMode }) {
+function LoginForm({ tokenInput, setTokenInput, onAuthenticated, address, setAddress, password, setPassword, loginMode, setLoginMode, loginError, setLoginError, resetToken, setResetToken, setResetMode, onCancel }) {
   const { t } = useI18n();
   const [forgotSent, setForgotSent] = React.useState(false);
   const [remember, setRemember] = React.useState(() => !!getRememberedCreds());
@@ -26,10 +26,10 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
         return j.data;
       })
       .then((data) => {
-        setToken(data.token);
-        if (data.address) {
-          setAccount({ address: data.address, name: data.name || "", brand: data.brand || "" });
-        }
+        onAuthenticated(
+          data.token,
+          data.address ? { address: data.address, name: data.name || "", brand: data.brand || "" } : null
+        );
         if (remember) {
           setRememberedCreds({ address: address.trim(), password: password.trim() });
         } else {
@@ -41,7 +41,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
 
   const onToken = (e) => {
     e.preventDefault();
-    if (tokenInput.trim()) setToken(tokenInput.trim());
+    if (tokenInput.trim()) onAuthenticated(tokenInput.trim(), null);
   };
 
   const onForgot = (e) => {
@@ -150,6 +150,14 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
         >
           {t("login_back")}
         </button>
+        {onCancel && (
+          <button
+            className="mt-3 ml-4 text-xs text-ink-dim hover:text-accent"
+            onClick={onCancel}
+          >
+            {t("cancel_add_account")}
+          </button>
+        )}
       </div>
     );
   }
@@ -157,7 +165,7 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
   // ─── default: password login ────────────────────────────────────────
   return (
     <div className="max-w-lg mx-auto mt-24 p-8 border border-paper-line rounded-lg bg-paper-raised">
-      <h1 className="font-display text-2xl mb-2">{t("login_title")}</h1>
+      <h1 className="font-display text-2xl mb-2">{onCancel ? t("add_account_title") : t("login_title")}</h1>
       <p className="text-ink-muted text-sm mb-4">
         {t("login_hint")}
       </p>
@@ -213,6 +221,14 @@ function LoginForm({ tokenInput, setTokenInput, setToken, setAccount, address, s
           {t("login_admin")}
         </button>
       </div>
+      {onCancel && (
+        <button
+          className="mt-3 w-full text-xs text-ink-dim hover:text-accent"
+          onClick={onCancel}
+        >
+          {t("cancel_add_account")}
+        </button>
+      )}
     </div>
   );
 }

@@ -2,8 +2,9 @@ const { useState, useEffect, useCallback, useRef } = React;
 
 function App() {
   const { t } = useI18n();
-  const { cfg, err, token, account, setToken, setAccount, clearAuth } = useConfig();
+  const { cfg, err, token, account, accounts, activeKey, addAccount, switchAccount, removeAccount } = useConfig();
   const [tokenInput, setTokenInput] = useState(token || "");
+  const [addingAccount, setAddingAccount] = useState(false);
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
   const [loginMode, setLoginMode] = useState("password");
@@ -305,13 +306,17 @@ function App() {
 
   if (err) return <div className="p-8 text-red-400">{t("config_error", err)}</div>;
   if (!cfg) return <div className="p-8 text-ink-muted">{t("booting")}</div>;
-  if (!token) {
+  if (!token || addingAccount) {
     return (
       <LoginForm
         tokenInput={tokenInput}
         setTokenInput={setTokenInput}
-        setToken={setToken}
-        setAccount={setAccount}
+        onAuthenticated={(tok, acct) => {
+          addAccount(tok, acct);
+          setAddingAccount(false);
+          setAddress("");
+          setPassword("");
+        }}
         address={address}
         setAddress={setAddress}
         password={password}
@@ -323,6 +328,7 @@ function App() {
         resetToken={resetToken}
         setResetToken={setResetToken}
         setResetMode={(v) => { if (!v) { setResetToken(""); setLoginMode("password"); } }}
+        onCancel={token && accounts.length > 0 ? () => { setAddingAccount(false); setLoginError(""); } : undefined}
       />
     );
   }
@@ -373,9 +379,14 @@ function App() {
       setOffset={setOffset}
       pageSize={pageSize}
       account={account}
+      accounts={accounts}
+      activeKey={activeKey}
+      onSwitchAccount={switchAccount}
+      onAddAccount={() => { setAddress(""); setPassword(""); setLoginMode("password"); setAddingAccount(true); }}
+      onRemoveAccount={removeAccount}
       brand={account?.brand || cfg?.brand || "poche"}
       onBack={() => setSelected(null)}
-      onLogout={() => { clearAuth(); setPassword(""); }}
+      onLogout={() => { removeAccount(activeKey); setPassword(""); }}
       composeOpen={composeOpen}
       setComposeOpen={setComposeOpen}
       composeMinimized={composeMinimized}

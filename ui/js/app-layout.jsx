@@ -43,6 +43,11 @@ function AppLayout({
   setOffset,
   pageSize,
   account,
+  accounts,
+  activeKey,
+  onSwitchAccount,
+  onAddAccount,
+  onRemoveAccount,
   onLogout,
   composeOpen,
   brand,
@@ -103,6 +108,11 @@ function AppLayout({
         onLogout={onLogout}
         token={token}
         account={account}
+        accounts={accounts}
+        activeKey={activeKey}
+        onSwitchAccount={onSwitchAccount}
+        onAddAccount={() => { onAddAccount(); setNavOpen(false); }}
+        onRemoveAccount={onRemoveAccount}
         onComposeClick={() => { setComposeOpen(true); setComposeMinimized(false); setNavOpen(false); }}
         brand={brand}
         onCloseNav={() => setNavOpen(false)}

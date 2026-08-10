@@ -1,55 +1,102 @@
 const LINK_ARCHIVE = "message_tags.message_id:tag=archive";
 
-function getWebmailToken() {
-  const q = new URLSearchParams(location.search).get("token");
-  if (q) {
-    try {
-      localStorage.setItem("webmail_token", q);
-    } catch (_) {}
-    return q;
-  }
+// ─── multi-account session store ───────────────────────────────────────
+// Each logged-in mailbox keeps its own session token, all stored together,
+// so switching accounts (like Proton's account switcher) never needs to
+// re-authenticate as long as that session hasn't expired — and logging
+// into a second mailbox no longer overwrites the first one's credentials.
+// `key` is the mailbox address when known, or a synthetic "token:<hash>"
+// for a raw admin-token login where no address was returned.
+
+function accountKey(account, token) {
+  if (account && account.address) return account.address;
+  return "token:" + token.slice(0, 12);
+}
+
+function loadAccounts() {
   try {
-    return localStorage.getItem("webmail_token") || "";
+    const raw = localStorage.getItem("webmail_accounts");
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveAccounts(list) {
+  try {
+    if (list.length) {
+      localStorage.setItem("webmail_accounts", JSON.stringify(list));
+    } else {
+      localStorage.removeItem("webmail_accounts");
+    }
+  } catch (_) {}
+}
+
+function getActiveAccountKey() {
+  try {
+    return localStorage.getItem("webmail_active_key") || "";
   } catch (_) {
     return "";
   }
 }
 
-function clearWebmailToken() {
+function setActiveAccountKey(key) {
+  try {
+    if (key) localStorage.setItem("webmail_active_key", key);
+    else localStorage.removeItem("webmail_active_key");
+  } catch (_) {}
+}
+
+// One-time migration from the old single-slot webmail_token/webmail_account
+// keys (and a ?token= URL param) into the new multi-account list, so
+// existing logged-in users aren't signed out by this change.
+function migrateLegacyAccount() {
+  const q = new URLSearchParams(location.search).get("token");
+  let legacyToken = q;
+  let legacyAccount = null;
+  try {
+    if (!legacyToken) legacyToken = localStorage.getItem("webmail_token") || "";
+    const raw = localStorage.getItem("webmail_account");
+    legacyAccount = raw ? JSON.parse(raw) : null;
+  } catch (_) {}
+  if (!legacyToken) return;
+  const key = accountKey(legacyAccount, legacyToken);
+  const list = loadAccounts().filter((a) => a.key !== key);
+  list.push({
+    key,
+    token: legacyToken,
+    address: legacyAccount?.address || "",
+    name: legacyAccount?.name || "",
+    brand: legacyAccount?.brand || "",
+  });
+  saveAccounts(list);
+  setActiveAccountKey(key);
   try {
     localStorage.removeItem("webmail_token");
-  } catch (_) {}
-}
-
-function setWebmailToken(t) {
-  try {
-    localStorage.setItem("webmail_token", t);
-  } catch (_) {}
-}
-
-function getWebmailAccount() {
-  try {
-    const raw = localStorage.getItem("webmail_account");
-    return raw ? JSON.parse(raw) : null;
-  } catch (_) {
-    return null;
-  }
-}
-
-function setWebmailAccount(account) {
-  try {
-    if (account) {
-      localStorage.setItem("webmail_account", JSON.stringify(account));
-    } else {
-      localStorage.removeItem("webmail_account");
-    }
-  } catch (_) {}
-}
-
-function clearWebmailAccount() {
-  try {
     localStorage.removeItem("webmail_account");
   } catch (_) {}
+}
+
+function upsertAccount(token, account) {
+  const key = accountKey(account, token);
+  const list = loadAccounts().filter((a) => a.key !== key);
+  list.push({
+    key,
+    token,
+    address: account?.address || "",
+    name: account?.name || "",
+    brand: account?.brand || "",
+  });
+  saveAccounts(list);
+  setActiveAccountKey(key);
+  return { list, key };
+}
+
+function removeAccount(key) {
+  const list = loadAccounts().filter((a) => a.key !== key);
+  saveAccounts(list);
+  return list;
 }
 
 function getRememberedCreds() {
@@ -114,22 +161,56 @@ function useTheme() {
 function useConfig() {
   const [cfg, setCfg] = React.useState(null);
   const [err, setErr] = React.useState("");
-  const [token, setToken] = React.useState(getWebmailToken);
-  const [account, setAccount] = React.useState(getWebmailAccount);
+  const [accounts, setAccounts] = React.useState(() => {
+    migrateLegacyAccount();
+    return loadAccounts();
+  });
+  // Reads AFTER the accounts-state initializer above has already run
+  // migrateLegacyAccount() — a fresh ?token= login or a pre-existing
+  // single-slot session is migrated into the list before this executes.
+  const [activeKey, setActiveKey] = React.useState(getActiveAccountKey);
+
   React.useEffect(() => {
     fetch("/api/config")
       .then((r) => r.json())
       .then((j) => setCfg(j.data || j))
       .catch((e) => setErr(String(e)));
   }, []);
+
+  const active = accounts.find((a) => a.key === activeKey) || null;
+
   return {
     cfg,
     err,
-    token,
-    account,
-    setToken: (t) => { setWebmailToken(t); setToken(t); },
-    setAccount: (a) => { setWebmailAccount(a); setAccount(a); },
-    clearAuth: () => { clearWebmailToken(); clearWebmailAccount(); setToken(""); setAccount(null); },
+    token: active?.token || "",
+    account: active ? { address: active.address, name: active.name, brand: active.brand } : null,
+    accounts,
+    activeKey,
+    // Logs in a NEW account (or refreshes an existing one's token) and
+    // switches to it, without disturbing any other already-open session.
+    addAccount: (token, account) => {
+      const { list, key } = upsertAccount(token, account);
+      setAccounts(list);
+      setActiveKey(key);
+    },
+    // Switches the active session instantly from an already-open one —
+    // no network round trip, since its token is still cached locally.
+    switchAccount: (key) => {
+      setActiveAccountKey(key);
+      setActiveKey(key);
+    },
+    // Signs out of ONE account. If it was the active one, falls back to
+    // whatever's left (or the login screen if this was the last account) —
+    // signing into a second mailbox should never cost you the first one.
+    removeAccount: (key) => {
+      const list = removeAccount(key);
+      setAccounts(list);
+      if (key === activeKey) {
+        const next = list[0]?.key || "";
+        setActiveAccountKey(next);
+        setActiveKey(next);
+      }
+    },
   };
 }
 
