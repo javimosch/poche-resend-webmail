@@ -107,6 +107,38 @@ check both. All aliases share the same inbox, password, and quota.
 ./poche-resend-webmail mailbox alias list   --mailbox contact@x.fr
 ```
 
+### Catch-all domain mailboxes
+
+A mailbox can additionally claim an entire domain: any address at that
+domain which doesn't match a real mailbox or alias first routes into it.
+Useful for a single "admin@x.fr" login that reads everything sent to
+`anything@x.fr` — e.g. reusing a Resend account/key that already owns the
+whole domain, without provisioning one mailbox per sender address.
+
+```bash
+./poche-resend-webmail mailbox update --address admin@intrane.fr --catchall-domain intrane.fr
+./poche-resend-webmail mailbox update --address admin@intrane.fr --catchall-domain none   # clear
+```
+
+At most one mailbox may claim a given domain — setting it on a second
+mailbox is refused with the address that already owns it. `mailbox list`
+reports `catchall_domain` on whichever mailbox has one.
+
+**Precedence**: exact `mailboxes.address` match, then `aliases.address`,
+then a domain catch-all — in that order, for all three inbound paths
+(webhook, SMTP receiver, `sync`), which all funnel through the same
+`findMailboxRecordForAddress`/`findOrCreateMailboxForAddress` resolvers
+(session.go). This means giving one specific address under a claimed domain
+its own mailbox later (or aliasing it elsewhere) makes it stop landing in
+the catch-all automatically — nothing on the catch-all mailbox itself needs
+to change.
+
+The catch-all mailbox is an ordinary mailbox row: its own password, its own
+`max_bytes` quota (see "Storage usage" above), its own Resend credentials.
+A busy catch-all inbox will fill its quota faster than a single-address one,
+so budget accordingly. Nothing in `mailboxAllowsIngest`/`mailboxUsage`
+changes — quota enforcement is unaware of catch-all routing.
+
 ### Forgot password
 
 Requires `--recovery-email` set on the mailbox. The reset link is sent

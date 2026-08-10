@@ -300,7 +300,12 @@ func getMailboxByID(p *Poche, id string) (*mailboxRecord, error) {
 }
 
 // findMailboxRecordForAddress resolves an inbound recipient to its mailbox
-// record (primary address or alias). Returns nil when nothing matches.
+// record: an exact mailboxes.address match, then an alias, then — only if
+// neither matches — a mailbox that has claimed the recipient's whole domain
+// as a catch-all (see mailboxRecord.CatchallDomain). This order matters: a
+// mailbox provisioned later for one specific address under a catch-all
+// domain must win over the catch-all without anyone touching the catch-all
+// mailbox itself. Returns nil when nothing matches.
 func findMailboxRecordForAddress(p *Poche, addr string) (*mailboxRecord, error) {
 	addr = strings.ToLower(strings.Trim(addr, "<>"))
 	if addr == "" {
@@ -317,25 +322,20 @@ func findMailboxRecordForAddress(p *Poche, addr string) (*mailboxRecord, error) 
 	if err != nil {
 		return nil, err
 	}
-	return mb, nil
+	if mb != nil {
+		return mb, nil
+	}
+	return findMailboxByCatchallDomain(p, emailDomain(addr))
 }
 
 // findOrCreateMailboxForAddress routes inbound email to the right mailbox.
-// Checks both mailboxes.address and aliases.address.
+// Checks mailboxes.address, then aliases.address, then a domain catch-all
+// (see findMailboxRecordForAddress for the precedence rationale).
 // Returns empty string if no mailbox matches (email is dropped).
 func findOrCreateMailboxForAddress(p *Poche, addr string) (string, error) {
-	addr = strings.ToLower(strings.Trim(addr, "<>"))
-	mb, err := findMailboxByAddress(p, addr)
-	if err != nil {
-		return "", err
-	}
-	if mb != nil {
-		return mb.ID, nil
-	}
-	// try alias lookup
-	mb, err = findMailboxByAlias(p, addr)
+	mb, err := findMailboxRecordForAddress(p, addr)
 	if err != nil || mb == nil {
-		return "", nil
+		return "", err
 	}
 	return mb.ID, nil
 }

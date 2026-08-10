@@ -25,9 +25,10 @@ const mailboxSchemaExtra = "password_hash:string,is_active:bool,created_at:int"
 const sessionsSchema = "token:string!required!unique,mailbox_id:string!required!ref=mailboxes,expires_at:int"
 
 func ensureMailboxSchema(p *Poche) error {
-	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required!unique,retention_months:float,max_messages:int,max_bytes:int,message_count:int,used_bytes:int,password_hash:string,recovery_email:string,resend_api_key:string,resend_webhook_secret:string,webmail_url:string,reset_from:string,brand:string,is_active:bool,created_at:int"); err != nil {
+	if err := p.AdminSchema("mailboxes", "name:string!required!unique,address:string!required!unique,retention_months:float,max_messages:int,max_bytes:int,message_count:int,used_bytes:int,password_hash:string,recovery_email:string,resend_api_key:string,resend_webhook_secret:string,webmail_url:string,reset_from:string,brand:string,is_active:bool,created_at:int,catchall_domain:string"); err != nil {
 		return fmt.Errorf("mailboxes: %w", err)
 	}
+	_ = p.AdminIndex("mailboxes", "catchall_domain", "")
 	if err := p.AdminSchema("sessions", sessionsSchema); err != nil {
 		return fmt.Errorf("sessions: %w", err)
 	}
@@ -60,6 +61,11 @@ type mailboxRecord struct {
 	WebmailURL      string
 	ResetFrom       string
 	Brand           string
+	// CatchallDomain, when set, makes this mailbox the inbound target for any
+	// address at that domain that doesn't match a real mailbox or alias
+	// first — e.g. "intrane.fr" catches mail to any-name@intrane.fr. At most
+	// one mailbox may claim a given domain (enforced in mailboxUpdateCmd).
+	CatchallDomain  string
 	IsActive        bool
 	RetentionMonths float64
 	MaxMessages     int
@@ -89,6 +95,44 @@ func findMailboxByAddress(p *Poche, addr string) (*mailboxRecord, error) {
 		return nil, nil
 	}
 	return parseMailbox(page.Items[0].ID, page.Items[0].Doc), nil
+}
+
+// findMailboxByCatchallDomain looks up the mailbox (if any) configured to
+// catch mail for an entire domain. addrDomain must already be the lowercase
+// part after '@' — callers derive it from the inbound recipient address.
+func findMailboxByCatchallDomain(p *Poche, addrDomain string) (*mailboxRecord, error) {
+	if addrDomain == "" {
+		return nil, nil
+	}
+	data, err := p.List("mailboxes", "catchall_domain="+addrDomain, 1, 0, "", false)
+	if err != nil {
+		return nil, err
+	}
+	var page struct {
+		Items []struct {
+			ID  string          `json:"id"`
+			Doc json.RawMessage `json:"doc"`
+		} `json:"items"`
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal(data, &page); err != nil {
+		return nil, err
+	}
+	if page.Total == 0 || len(page.Items) == 0 {
+		return nil, nil
+	}
+	return parseMailbox(page.Items[0].ID, page.Items[0].Doc), nil
+}
+
+// emailDomain returns the lowercase domain part of an address, or "" if the
+// address has no '@'. Shared by the catch-all resolver and its CLI validation.
+func emailDomain(addr string) string {
+	addr = strings.ToLower(strings.TrimSpace(addr))
+	_, domain, ok := strings.Cut(addr, "@")
+	if !ok {
+		return ""
+	}
+	return domain
 }
 
 func listAllMailboxes(p *Poche) ([]mailboxRecord, error) {
@@ -127,6 +171,7 @@ func parseMailbox(id string, raw json.RawMessage) *mailboxRecord {
 		WebmailURL:          stringField(doc, "webmail_url"),
 		ResetFrom:           stringField(doc, "reset_from"),
 		Brand:               stringField(doc, "brand"),
+		CatchallDomain:      stringField(doc, "catchall_domain"),
 		IsActive:            boolField(doc, "is_active"),
 		RetentionMonths:     numField(doc, "retention_months"),
 		MaxMessages:         int(numField(doc, "max_messages")),
@@ -306,6 +351,7 @@ func mailboxListCmd() {
 		ResendKey        string   `json:"resend_key"`
 		HasResendKey     bool     `json:"has_resend_key"`
 		HasWebhookSecret bool     `json:"has_webhook_secret"`
+		CatchallDomain   string   `json:"catchall_domain,omitempty"`
 		CreatedAt        int64    `json:"created_at"`
 	}
 	out := make([]mbOut, 0, len(mboxes))
@@ -325,6 +371,7 @@ func mailboxListCmd() {
 			ResendKey:        maskSecret(mb.ResendAPIKey),
 			HasResendKey:     mb.ResendAPIKey != "",
 			HasWebhookSecret: mb.ResendWebhookSecret != "",
+			CatchallDomain:   mb.CatchallDomain,
 			CreatedAt:        mb.CreatedAt,
 		})
 	}
@@ -345,6 +392,7 @@ func mailboxUpdateCmd() {
 	webmailURL := fs.String("webmail-url", "", "set login URL used in reset links ('none' = clear)")
 	resetFrom := fs.String("reset-from", "", "set sender for reset emails ('none' = clear)")
 	brand := fs.String("brand", "", "set the sidebar brand for this tenant ('none' = clear)")
+	catchallDomain := fs.String("catchall-domain", "", "receive mail for any address at this domain that doesn't match a real mailbox/alias ('none' = clear)")
 	_ = fs.Parse(os.Args[3:])
 	if *addr == "" {
 		fail(80, "input", "--address required", "")
@@ -430,6 +478,22 @@ func mailboxUpdateCmd() {
 		}
 		doc["resend_webhook_secret"] = sealed
 	}
+	if *catchallDomain == "none" {
+		doc["catchall_domain"] = ""
+	} else if *catchallDomain != "" {
+		domain := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(*catchallDomain), "@"))
+		if strings.Contains(domain, "@") || domain == "" {
+			fail(80, "input", "--catchall-domain must be a bare domain, e.g. intrane.fr (not an address)", "")
+		}
+		existing, err := findMailboxByCatchallDomain(p, domain)
+		if err != nil {
+			fail(100, "integration", "catchall-domain lookup: "+err.Error(), "")
+		}
+		if existing != nil && existing.ID != mb.ID {
+			fail(80, "input", "domain already claimed by another mailbox: "+existing.Address, "mailbox update --address "+existing.Address+" --catchall-domain none")
+		}
+		doc["catchall_domain"] = domain
+	}
 	if _, err := p.Update("mailboxes", mb.ID, doc); err != nil {
 		fail(100, "integration", "update: "+err.Error(), "")
 	}
@@ -438,6 +502,7 @@ func mailboxUpdateCmd() {
 		"address":            mb.Address,
 		"has_resend_key":     stringField(doc, "resend_api_key") != "",
 		"has_webhook_secret": stringField(doc, "resend_webhook_secret") != "",
+		"catchall_domain":    stringField(doc, "catchall_domain"),
 	})
 }
 
