@@ -703,6 +703,30 @@ ordered, and confirmed in a real browser that the conversation strip
 renders both, highlights the active one, and clicking the other switches
 to it and loads its own full body.
 
+## Starring has never actually worked from the UI (fixed 2026-08-10)
+
+`PUT /api/messages/:id/star` returned `{"ok":true,"starred":star}` — a bare
+top-level key, unlike every other endpoint's `{"ok":true,"data":{...}}`.
+`apiFetch` (ui/js/api.jsx) unconditionally returns `j.data`, so `onStar`'s
+`.then((res) => res.starred)` always read `undefined.starred` and threw —
+caught by a bare `.catch((e) => console.error(e))` with no `alert()`, so
+the failure was completely invisible: the server-side toggle actually
+succeeded every time (confirmed — starring via curl, then loading the UI,
+showed the star already filled), only the CLIENT never found out and so
+never updated the ★/☆ icon or the pane's Star/Unstar label. This had
+apparently never worked from the UI at any point — found via a real user
+report ("no feedback"), reproduced in a live browser (a real
+`TypeError: Cannot read properties of undefined (reading 'starred')` in
+the console, invisible in the actual UI), root-caused to the response
+shape mismatch. Fixed by wrapping the response in `data` like every other
+endpoint. `onStar`'s catch now also `alert()`s, matching `onReply`'s
+existing pattern — so a future regression like this surfaces immediately
+instead of silently doing nothing for a year.
+
+There is still no "Starred" folder/filter in the sidebar (only the
+retention-exemption behavior — starred messages are never auto-cleaned).
+Not a bug, just not built yet.
+
 ## Compose formats (v0.3.3+)
 
 `POST /api/compose` takes `format`: `text` (default), `html`, or `markdown`.

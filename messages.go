@@ -110,7 +110,13 @@ func handleMessagesAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "starred": star})
+		// Wrapped in "data" like every other endpoint's success response —
+		// apiFetch (ui/js/api.jsx) unconditionally returns j.data, so a bare
+		// top-level "starred" key here left the frontend's onStar handler
+		// reading res.starred off `undefined` and throwing on every single
+		// star click, silently (caught by a bare .catch(console.error), no
+		// visible error) — starring has never actually worked from the UI.
+		writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"starred": star}})
 		return
 	}
 	if len(parts) >= 1 && parts[0] != "" && r.Method == http.MethodGet {

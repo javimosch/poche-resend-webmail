@@ -294,7 +294,10 @@ function App() {
         if (msg && msg.id === id) setMsg(Object.assign({}, msg, { starred }));
         setItems((prev) => prev.map((it) => (it.id === id ? Object.assign({}, it, { starred }) : it)));
       })
-      .catch((e) => console.error(e))
+      .catch((e) => {
+        console.error(e);
+        alert(String(e.message || e));
+      })
       .finally(() => setBusy(false));
   };
 
