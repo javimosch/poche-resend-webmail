@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -41,6 +42,29 @@ func handleMessagesAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{"count": n}})
+		return
+	}
+
+	if path == "facets" && r.Method == http.MethodGet {
+		field := r.URL.Query().Get("field")
+		if field != "to_addr" && field != "from_addr" {
+			writeJSON(w, 400, map[string]any{"ok": false, "error": "field must be to_addr or from_addr"})
+			return
+		}
+		if mbID == "" {
+			// Facets are a per-mailbox convenience (distinct addresses THIS
+			// mailbox has seen) — an admin token has no mailbox to scope to.
+			writeJSON(w, 400, map[string]any{"ok": false, "error": "facets require a mailbox-scoped login"})
+			return
+		}
+		values, truncated, err := messageFieldFacets(p, mbID, field)
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "data": map[string]any{
+			"field": field, "values": values, "truncated": truncated,
+		}})
 		return
 	}
 
@@ -208,6 +232,77 @@ func handleAttachmentOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 404, map[string]any{"ok": false, "error": "no content stored for this attachment"})
+}
+
+type facetValue struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+// facetScanCap bounds how many messages messageFieldFacets will read before
+// giving up and returning what it has with truncated=true. Uncapped, a
+// catch-all mailbox's inbox (issue #1) could hold enough messages to make
+// this a full-mailbox-in-memory scan on every dropdown open.
+const facetScanCap = 20000
+
+// messageFieldFacets returns the distinct values of `field` (to_addr or
+// from_addr) across a mailbox's messages, each with how many messages carry
+// it, sorted by count descending. There is no GROUP BY in poche's query
+// language reachable from this client, so this pages through messages and
+// aggregates in Go — capped at facetScanCap messages (truncated=true if the
+// mailbox has more), since an unbounded scan doesn't fit a UI dropdown.
+func messageFieldFacets(p *Poche, mailboxID, field string) ([]facetValue, bool, error) {
+	counts := map[string]int{}
+	scanned := 0
+	offset := 0
+	const pageSize = 2000
+	truncated := false
+	for scanned < facetScanCap {
+		data, err := p.List("messages", "mailbox_id="+mailboxID, pageSize, offset, "", false)
+		if err != nil {
+			return nil, false, err
+		}
+		var page struct {
+			Items []struct {
+				Doc json.RawMessage `json:"doc"`
+			} `json:"items"`
+			Total int `json:"total"`
+		}
+		if err := json.Unmarshal(data, &page); err != nil {
+			return nil, false, err
+		}
+		if len(page.Items) == 0 {
+			break
+		}
+		for _, it := range page.Items {
+			doc := map[string]any{}
+			_ = json.Unmarshal(it.Doc, &doc)
+			v := strField(doc, field)
+			if v != "" {
+				counts[v]++
+			}
+		}
+		scanned += len(page.Items)
+		offset += len(page.Items)
+		if offset >= page.Total {
+			break
+		}
+		if scanned >= facetScanCap {
+			truncated = true
+			break
+		}
+	}
+	out := make([]facetValue, 0, len(counts))
+	for v, n := range counts {
+		out = append(out, facetValue{Value: v, Count: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Value < out[j].Value
+	})
+	return out, truncated, nil
 }
 
 func atoiDef(s string, def int) int {

@@ -122,7 +122,22 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
   );
 }
 
-function Toolbar({ q, setQ, onSearch, selCount, onBulk, onMarkAll, view, tags, busy }) {
+function Toolbar({
+  q,
+  setQ,
+  onSearch,
+  addrField,
+  setAddrField,
+  addrValue,
+  setAddrValue,
+  addrFacets,
+  selCount,
+  onBulk,
+  onMarkAll,
+  view,
+  tags,
+  busy,
+}) {
   const { t } = useI18n();
   const n = selCount;
   const btn =
@@ -147,6 +162,34 @@ function Toolbar({ q, setQ, onSearch, selCount, onBulk, onMarkAll, view, tags, b
           {t("search")}
         </button>
       </form>
+      <div className="flex gap-1.5">
+        <select
+          className={btn + " bg-paper"}
+          value={addrField}
+          onChange={(e) => {
+            setAddrField(e.target.value);
+            setAddrValue("");
+          }}
+        >
+          <option value="">{t("filter_field_any")}</option>
+          <option value="to_addr">{t("filter_field_to")}</option>
+          <option value="from_addr">{t("filter_field_from")}</option>
+        </select>
+        {addrField && (
+          <select
+            className={btn + " bg-paper flex-1 min-w-0"}
+            value={addrValue}
+            onChange={(e) => setAddrValue(e.target.value)}
+          >
+            <option value="">{t("filter_value_placeholder")}</option>
+            {(addrFacets || []).map((f) => (
+              <option key={f.value} value={f.value}>
+                {t("filter_value_option", f.value, f.count)}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
       <div className="flex flex-wrap gap-1.5 items-center">
         <button className={btn} disabled={busy || n === 0} onClick={() => onBulk("mark_read")}>
           {t("mark_read_n", n)}
@@ -287,8 +330,11 @@ function MessageList({
                   {formatWhen(m.created_at, lang)}
                 </span>
               </div>
-              <div className={"text-sm truncate mt-0.5 " + (m.unread ? "text-ink" : "text-ink-muted")}>
-                {m.subject}
+              <div className="flex items-baseline gap-1.5 mt-0.5 min-w-0">
+                {m.direction !== "out" && m.to_addr && <AddressBadge address={m.to_addr} />}
+                <span className={"text-sm truncate " + (m.unread ? "text-ink" : "text-ink-muted")}>
+                  {m.subject}
+                </span>
               </div>
               <div className="text-xs text-ink-dim truncate mt-0.5">{m.preview}</div>
             </button>
@@ -296,6 +342,22 @@ function MessageList({
         );
       })}
     </div>
+  );
+}
+
+// Shows which address a received message was actually sent to — the whole
+// point once one mailbox can catch mail for many addresses (see issue #1's
+// catch-all domains). Without this, an inbox mixing addresses is impossible
+// to tell apart at a glance.
+function AddressBadge({ address }) {
+  const { t } = useI18n();
+  return (
+    <span
+      className="addr-badge shrink-0 max-w-[9rem] truncate"
+      title={t("sent_to_badge", address)}
+    >
+      {address}
+    </span>
   );
 }
 

@@ -225,17 +225,31 @@ function viewWhere(view) {
   return "";
 }
 
-function buildListPath(view, tagView, q, limit, offset) {
+function buildListPath(view, tagView, q, limit, offset, addrFilter) {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   params.set("offset", String(offset));
   params.set("sort", "created_at");
   params.set("order", "desc");
   const needle = (q || "").trim().replace(/,/g, " ");
-  const where = [viewWhere(view), needle ? "search_text~=" + needle : ""].filter(Boolean);
-  if (where.length) params.set("where", where.join(","));
+  const where = [viewWhere(view), needle ? "search_text~=" + needle : ""];
+  if (addrFilter && addrFilter.field && addrFilter.value) {
+    where.push(addrFilter.field + "=" + addrFilter.value.replace(/,/g, ""));
+  }
+  const whereClauses = where.filter(Boolean);
+  if (whereClauses.length) params.set("where", whereClauses.join(","));
   appendViewLinks(params, view, tagView);
   return "/api/messages?" + params.toString();
+}
+
+function buildFacetPath(field) {
+  return "/api/messages/facets?field=" + encodeURIComponent(field);
+}
+
+function fetchAddressFacets(token, field) {
+  return apiFetch(token, buildFacetPath(field))
+    .then((d) => d.values || [])
+    .catch(() => []);
 }
 
 function buildUnreadCountPath(view, tagView) {

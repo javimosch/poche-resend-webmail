@@ -9,6 +9,11 @@ function AppLayout({
   qInput,
   setQInput,
   onSearch,
+  addrField,
+  setAddrField,
+  addrValue,
+  setAddrValue,
+  addrFacets,
   items,
   selected,
   setSelected,
@@ -130,6 +135,11 @@ function AppLayout({
           q={qInput}
           setQ={setQInput}
           onSearch={onSearch}
+          addrField={addrField}
+          setAddrField={setAddrField}
+          addrValue={addrValue}
+          setAddrValue={setAddrValue}
+          addrFacets={addrFacets}
           selCount={selectAllPages ? total : checked.length}
           onBulk={onBulk}
           onMarkAll={onMarkAll}

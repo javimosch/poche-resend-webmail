@@ -21,6 +21,9 @@ function App() {
   const [unread, setUnread] = useState({ inbox: 0, archive: 0, tags: {} });
   const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
+  const [addrField, setAddrField] = useState("");
+  const [addrValue, setAddrValue] = useState("");
+  const [addrFacets, setAddrFacets] = useState([]);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState(null);
@@ -95,18 +98,34 @@ function App() {
     fetchSendAddresses(token).then(setSendAddresses);
   }, [token]);
 
+  useEffect(() => {
+    if (!token || !addrField) {
+      setAddrFacets([]);
+      return;
+    }
+    fetchAddressFacets(token, addrField).then((values) => {
+      setAddrFacets(values);
+      // A value picked under the previous field (or one that no longer has
+      // any messages) wouldn't match anything in the new list — drop it
+      // rather than silently keep filtering on a stale value.
+      setAddrValue((v) => (values.some((f) => f.value === v) ? v : ""));
+    });
+  }, [token, addrField]);
+
+  const addrFilter = addrField && addrValue ? { field: addrField, value: addrValue } : null;
+
   const loadList = useCallback(() => {
     if (!token) return;
     setLoading(true);
     ctxRef.current = { view, tagView, q };
-    apiFetch(token, buildListPath(view, tagView, q, pageSize, offset))
+    apiFetch(token, buildListPath(view, tagView, q, pageSize, offset, addrFilter))
       .then((data) => {
         setItems((data.items || []).map(rowFromItem));
         setTotal(data.total || 0);
       })
       .catch((e) => console.error(e))
       .finally(() => setLoading(false));
-  }, [token, view, tagView, q, offset]);
+  }, [token, view, tagView, q, offset, addrField, addrValue]);
 
   useEffect(() => {
     setSelected(null);
@@ -116,7 +135,7 @@ function App() {
     setOffset(0);
     setChecked([]);
     setSelectAllPages(false);
-  }, [view, tagView, q]);
+  }, [view, tagView, q, addrField, addrValue]);
 
   useEffect(() => {
     loadList();
@@ -320,6 +339,11 @@ function App() {
       qInput={qInput}
       setQInput={setQInput}
       onSearch={() => setQ(qInput.trim())}
+      addrField={addrField}
+      setAddrField={setAddrField}
+      addrValue={addrValue}
+      setAddrValue={setAddrValue}
+      addrFacets={addrFacets}
       items={items}
       selected={selected}
       setSelected={setSelected}

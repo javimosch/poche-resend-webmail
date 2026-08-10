@@ -182,6 +182,35 @@ Both paths use the same `upsertInbound` → `findOrCreateMailboxForAddress` flow
 
 The UI sidebar shows a live storage bar (fetches every 30s).
 
+### Address badge + filter (issue #2)
+
+Every inbox row shows a small badge with the address the message was
+actually sent to (`to_addr`) — the point once a mailbox can catch mail for
+many addresses (see catch-all domains above). The toolbar has a two-step
+filter: pick "Recipient" or "Sender", then pick one of the addresses that
+field has actually seen, with a live count.
+
+```
+GET /api/messages/facets?field=to_addr   (or from_addr)
+  → {"field":"to_addr","values":[{"value":"javi@intrane.fr","count":5},...],"truncated":false}
+```
+
+Requires a mailbox-scoped session (not an admin token — an admin has no
+single mailbox to scope the facet to). There is no GROUP BY in poche's
+query language reachable from this client, so `messageFieldFacets`
+(messages.go) pages through the mailbox's messages and aggregates in Go,
+capped at `facetScanCap` (20,000 messages) — `truncated:true` means the
+mailbox has more than that and the counts are a partial view, not the
+whole mailbox. The facet list always reflects the WHOLE mailbox, independent
+of whatever view/tag/search is currently active in the message list — it's
+a stable "addresses this mailbox has ever seen" list to filter FROM, not a
+live facet-of-the-current-results.
+
+Selecting a value adds an ordinary `to_addr=<addr>`/`from_addr=<addr>`
+equality clause to the same `where=` the search box already builds
+(`buildListPath`, ui/js/api.jsx) — no new query capability was needed for
+the filtering itself, only for building the dropdown's option list.
+
 ### Seeding test emails
 
 ```bash

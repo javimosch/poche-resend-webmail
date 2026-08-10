@@ -91,6 +91,12 @@ const I18N = {
     mark_all_read: "Mark all read",
     tag_n: (n) => "Tag (" + n + ")…",
     to_prefix: (a) => "To " + a,
+    filter_field_any: "Filter by address…",
+    filter_field_to: "Recipient",
+    filter_field_from: "Sender",
+    filter_value_placeholder: "Choose address…",
+    filter_value_option: (a, n) => a + " (" + n + ")",
+    sent_to_badge: (a) => "sent to " + a,
 
     // message pane
     select_message: "Select a message",
@@ -238,6 +244,12 @@ const I18N = {
     mark_all_read: "Tout marquer comme lu",
     tag_n: (n) => "Étiqueter (" + n + ")…",
     to_prefix: (a) => "À " + a,
+    filter_field_any: "Filtrer par adresse…",
+    filter_field_to: "Destinataire",
+    filter_field_from: "Expéditeur",
+    filter_value_placeholder: "Choisir une adresse…",
+    filter_value_option: (a, n) => a + " (" + n + ")",
+    sent_to_badge: (a) => "envoyé à " + a,
 
     select_message: "Sélectionnez un message",
     from: "De",

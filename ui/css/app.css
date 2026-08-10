@@ -124,3 +124,16 @@ input, textarea, select, button {
   font: inherit;
   color: inherit;
 }
+
+/* Target-address badge on an inbox row — see AddressBadge in components.jsx.
+   Distinct from the accent color used for active/selected state so it reads
+   as metadata, not as another interactive control. */
+.addr-badge {
+  font-size: 0.68rem;
+  font-family: ui-monospace, monospace;
+  line-height: 1.3;
+  padding: 0.05em 0.4em;
+  border-radius: 999px;
+  background: rgb(var(--paper-line) / 0.6);
+  color: rgb(var(--ink-dim));
+}
