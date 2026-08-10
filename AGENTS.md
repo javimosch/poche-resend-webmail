@@ -727,6 +727,55 @@ There is still no "Starred" folder/filter in the sidebar (only the
 retention-exemption behavior — starred messages are never auto-cleaned).
 Not a bug, just not built yet.
 
+## Inbox list collapses by thread, Gmail-style (2026-08-10)
+
+Direct follow-up to conversation threading above: once a reply-back
+correctly joins its thread (see that section), it showed up as a SECOND
+row in the inbox list — same conversation, two rows, which reads as a
+duplicate even though it isn't one. Gmail collapses same-thread rows into
+one, with a "(N)" count and the latest message's preview.
+
+`groupByThread` (api.jsx) does this client-side, over whatever page of
+messages is already loaded: since `buildListPath` always sorts
+`created_at` desc, a single pass is enough — the FIRST message seen for a
+`thread_id` is necessarily the latest, so it becomes the representative
+row; every later message with the same `thread_id` just increments that
+row's count and folds into its `anyUnread`/`anyStarred` flags. A message
+with no `thread_id` (a fresh Compose — see the known limitation above)
+gets its own single-message group, keyed by its own id, so nothing merges
+incorrectly.
+
+**Stated plainly, not silently**: this is a page-local collapse, not a
+true thread count. A thread whose messages straddle a page boundary still
+shows as separate rows on each page — poche has no server-side GROUP BY
+(same reason `messageFieldFacets` scans-and-aggregates in Go, see the
+address-badge section above), so a fully page-independent collapse isn't
+available without loading the whole mailbox per request.
+
+Selecting a collapsed row's checkbox selects EVERY message id in that
+group at once (`m.threadIds`, not just the one shown) — so bulk star/
+archive/delete/tag act on the whole conversation, matching what the
+toolbar's live "(N)" counts already implied. Clicking a collapsed row's
+star icon does the same via a new `onStarThread(ids, star)` handler
+(app.jsx) that reuses the EXISTING `/api/bulk` star/unstar action with
+explicit ids — no new backend endpoint, and it inherits that endpoint's
+already-fixed ownership check for free. `allIds`/`pageOn`/"select page"
+still operate over the raw, ungrouped message list, so their semantics
+("every message loaded on this page") stay exactly what they were before
+grouping existed — a grouped row's checkbox is just a derived view over
+the same underlying `checked` array.
+
+Verified in a real browser: seeded a 3-message thread (original inbound +
+our reply, direction=out, correctly excluded from the Inbox view's
+`direction=in` filter + a follow-up reply-back, direction=in); the Inbox
+list correctly showed ONE row for the two inbound messages with a "2"
+badge and the follow-up's own preview; clicking it opened the latest
+message with the pane's ThreadStrip showing all THREE messages including
+the outbound reply; the row checkbox selected both underlying ids at once
+(toolbar showed "(2)"); the star icon starred both underlying inbound
+messages via `onStarThread`, confirmed via a direct query — and did NOT
+touch the outbound reply, which was never part of that row's group.
+
 ## Compose formats (v0.3.3+)
 
 `POST /api/compose` takes `format`: `text` (default), `html`, or `markdown`.

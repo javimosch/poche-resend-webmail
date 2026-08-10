@@ -37,6 +37,7 @@ function AppLayout({
   busy,
   onToggleUnread,
   onStar,
+  onStarThread,
   onArchive,
   onUnarchive,
   onDelete,
@@ -167,6 +168,7 @@ function AppLayout({
             selected={selected}
             onSelect={setSelected}
             onStar={onStar}
+            onStarThread={onStarThread}
             loading={loading}
             checked={checked}
             setChecked={setChecked}

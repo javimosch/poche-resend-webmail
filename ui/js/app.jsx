@@ -301,6 +301,24 @@ function App() {
       .finally(() => setBusy(false));
   };
 
+  // Stars/unstars every message in a collapsed thread row at once (see
+  // groupByThread, api.jsx) — matches Gmail's own "starring a conversation
+  // stars every message in it" behavior. Reuses the bulk endpoint's
+  // existing per-id star/unstar action rather than adding new backend
+  // surface: it already accepts explicit ids and is already
+  // ownership-checked (see messages.go/bulk.go's cross-tenant IDOR fixes).
+  const onStarThread = (ids, star) => {
+    if (!token || !ids || !ids.length) return;
+    setBusy(true);
+    bulkFetch(token, { action: star ? "star" : "unstar", ids })
+      .then(refreshAfter)
+      .catch((e) => {
+        console.error(e);
+        alert(String(e.message || e));
+      })
+      .finally(() => setBusy(false));
+  };
+
   const onReply = (text, from, format) => {
     if (!msg) return Promise.resolve();
     setBusy(true);
@@ -409,6 +427,7 @@ function App() {
       busy={busy}
       onToggleUnread={onToggleUnread}
       onStar={onStar}
+      onStarThread={onStarThread}
       onArchive={() => runOne("archive")}
       onUnarchive={() => runOne("unarchive")}
       onDelete={() => runOne("delete")}

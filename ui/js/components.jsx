@@ -336,6 +336,7 @@ function MessageList({
   selected,
   onSelect,
   onStar,
+  onStarThread,
   loading,
   checked,
   setChecked,
@@ -344,9 +345,16 @@ function MessageList({
   setSelectAllPages,
 }) {
   const { t, lang } = useI18n();
+  // "select page"/select-all-pages still operate on every raw message id
+  // loaded, not one per collapsed row — checking a single grouped row below
+  // adds/removes its whole threadIds set, so the two stay consistent.
   const allIds = items.map((m) => m.id);
   const pageOn = allIds.length > 0 && allIds.every((id) => checked.includes(id));
   const multiPage = total > allIds.length && allIds.length > 0;
+  // Collapses same-thread rows (e.g. a received message + your reply to it)
+  // into one — see groupByThread's own comment (api.jsx) for what this does
+  // and does NOT do (page-local only, not a true server-side thread count).
+  const groups = groupByThread(items);
 
   if (loading) return <div className="p-6 text-ink-muted text-sm">{t("loading")}</div>;
   if (!items.length) {
@@ -377,9 +385,9 @@ function MessageList({
           </label>
         )}
       </div>
-      {items.map((m) => {
+      {groups.map((m) => {
         const active = selected === m.id;
-        const on = selectAllPages || checked.includes(m.id);
+        const on = selectAllPages || m.threadIds.every((id) => checked.includes(id));
         return (
           <div
             key={m.id}
@@ -396,26 +404,32 @@ function MessageList({
                 e.stopPropagation();
                 setSelectAllPages(false);
                 setChecked(
-                  e.target.checked ? checked.concat([m.id]) : checked.filter((x) => x !== m.id)
+                  e.target.checked
+                    ? checked.concat(m.threadIds.filter((id) => !checked.includes(id)))
+                    : checked.filter((x) => !m.threadIds.includes(x))
                 );
               }}
             />
             <button
               className={
                 "text-base leading-none shrink-0 " +
-                (m.starred ? "text-accent" : "text-ink-dim hover:text-accent")
+                (m.anyStarred ? "text-accent" : "text-ink-dim hover:text-accent")
               }
-              title={m.starred ? "Unstar" : "Star"}
+              title={m.anyStarred ? "Unstar" : "Star"}
               onClick={(e) => {
                 e.stopPropagation();
-                onStar(m.id, !m.starred);
+                if (m.threadCount > 1) {
+                  onStarThread(m.threadIds, !m.anyStarred);
+                } else {
+                  onStar(m.id, !m.anyStarred);
+                }
               }}
             >
-              {m.starred ? "★" : "☆"}
+              {m.anyStarred ? "★" : "☆"}
             </button>
             <button className="flex-1 min-w-0 text-left" onClick={() => onSelect(m.id)}>
               <div className="flex items-baseline justify-between gap-2">
-                <span className={"text-sm truncate " + (m.unread ? "font-semibold text-ink" : "text-ink-muted")}>
+                <span className={"text-sm truncate " + (m.anyUnread ? "font-semibold text-ink" : "text-ink-muted")}>
                   {m.direction === "out" ? t("to_prefix", m.to_addr || "") : m.from_addr}
                 </span>
                 <span className="text-[0.76rem] font-mono text-ink-dim shrink-0 tabular-nums">
@@ -424,9 +438,14 @@ function MessageList({
               </div>
               <div className="flex items-baseline gap-1.5 mt-0.5 min-w-0">
                 {m.direction !== "out" && m.to_addr && <AddressBadge address={m.to_addr} />}
-                <span className={"text-sm truncate " + (m.unread ? "text-ink" : "text-ink-muted")}>
+                <span className={"text-sm truncate " + (m.anyUnread ? "text-ink" : "text-ink-muted")}>
                   {m.subject}
                 </span>
+                {m.threadCount > 1 && (
+                  <span className="shrink-0 text-[0.7rem] font-mono text-ink-dim px-1 rounded bg-paper-line/60">
+                    {m.threadCount}
+                  </span>
+                )}
               </div>
               <div className="text-xs text-ink-dim truncate mt-0.5">{m.preview}</div>
             </button>

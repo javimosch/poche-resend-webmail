@@ -272,6 +272,49 @@ function rowFromItem(it) {
   return Object.assign({ id: it.id }, doc);
 }
 
+// groupByThread collapses a message list into one row per conversation, so
+// a follow-up reply doesn't show up as a second, seemingly-duplicate inbox
+// row (see the message pane's ThreadStrip for the full conversation, and
+// AGENTS.md's threading section for how thread_id is kept consistent).
+// `items` must already be sorted newest-first (buildListPath always sorts
+// created_at desc) — that ordering is what lets this collapse in one pass:
+// the FIRST message seen for a thread_id is necessarily its latest, so it
+// becomes the representative row and everything after just adds to its
+// count/unread/starred state. Messages without a thread_id (a fresh
+// Compose — see AGENTS.md's known limitation) each form their own
+// single-message group, keyed by their own id.
+//
+// Important limitation, stated plainly rather than silently: this only
+// collapses threads within the messages already loaded on the CURRENT
+// page. A thread whose messages straddle a page boundary will still show
+// as separate rows on each page — poche has no server-side GROUP BY (see
+// messageFieldFacets' own comment on this), so a fully page-independent
+// collapse isn't available without loading the whole mailbox up front.
+function groupByThread(items) {
+  const order = [];
+  const byThread = new Map();
+  for (const m of items) {
+    const key = m.thread_id || m.id;
+    let g = byThread.get(key);
+    if (!g) {
+      g = Object.assign({}, m, {
+        threadIds: [m.id],
+        threadCount: 1,
+        anyUnread: !!m.unread,
+        anyStarred: !!m.starred,
+      });
+      byThread.set(key, g);
+      order.push(g);
+    } else {
+      g.threadIds.push(m.id);
+      g.threadCount += 1;
+      if (m.unread) g.anyUnread = true;
+      if (m.starred) g.anyStarred = true;
+    }
+  }
+  return order;
+}
+
 function tagNamesFromPage(data) {
   return (data?.items || [])
     .map((it) => {
