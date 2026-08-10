@@ -99,7 +99,7 @@ func handleReplyCmd() {
 	if len(os.Args) > 4 {
 		from = os.Args[4]
 	}
-	data, err := replyMessage(id, text, from, "", "")
+	data, err := replyMessage(id, text, from, "", "", "")
 	if err != nil {
 		fail(100, "integration", err.Error(), "")
 	}

@@ -292,12 +292,12 @@ function App() {
       .finally(() => setBusy(false));
   };
 
-  const onReply = (text, from) => {
+  const onReply = (text, from, format) => {
     if (!msg) return Promise.resolve();
     setBusy(true);
     return apiFetch(token, "/api/reply", {
       method: "POST",
-      body: JSON.stringify({ id: msg.id, text, from: from || "" }),
+      body: JSON.stringify({ id: msg.id, text, from: from || "", format: format || "" }),
     })
       .then(refreshAfter)
       .catch((e) => {

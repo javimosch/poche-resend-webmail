@@ -19,6 +19,10 @@ func handleReplyAPI(w http.ResponseWriter, r *http.Request) {
 		From    string `json:"from"`
 		To      string `json:"to"`
 		Subject string `json:"subject"`
+		// "text" (default), "html", or "markdown" — same as compose (see
+		// composeReq.Format in compose.go), rendered through the same
+		// renderBody so both paths produce identical output for the same input.
+		Format string `json:"format"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID == "" || req.Text == "" {
 		writeJSON(w, 400, map[string]any{"ok": false, "error": "id and text required"})
@@ -42,7 +46,7 @@ func handleReplyAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	data, err := replyMessage(req.ID, req.Text, req.From, req.To, req.Subject)
+	data, err := replyMessage(req.ID, req.Text, req.From, req.To, req.Subject, req.Format)
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
 		return
@@ -50,7 +54,7 @@ func handleReplyAPI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"ok": true, "data": data})
 }
 
-func replyMessage(localID, text, fromOverride, toOverride, subjOverride string) (map[string]any, error) {
+func replyMessage(localID, text, fromOverride, toOverride, subjOverride, format string) (map[string]any, error) {
 	p := newPocheFromEnv()
 	doc, err := loadDoc(p, localID)
 	if err != nil {
@@ -96,11 +100,21 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride string) 
 		subj = reSubject(fmt.Sprint(doc["subject"]))
 	}
 	mid, _ := doc["message_id"].(string)
+	textPart, htmlPart, err := renderBody(text, format)
+	if err != nil {
+		return nil, fmt.Errorf("render %s body: %w", normalizeFormat(format), err)
+	}
+	if strings.TrimSpace(stripTags(htmlPart)) == "" && strings.TrimSpace(textPart) == "" {
+		return nil, fmt.Errorf("body is empty after rendering")
+	}
 	payload := map[string]any{
 		"from":    from,
 		"to":      []string{to},
 		"subject": subj,
-		"text":    text,
+		"text":    textPart,
+	}
+	if htmlPart != "" {
+		payload["html"] = htmlPart
 	}
 	if mid != "" {
 		payload["headers"] = map[string]string{
@@ -116,24 +130,25 @@ func replyMessage(localID, text, fromOverride, toOverride, subjOverride string) 
 	sentID, _ := sent["id"].(string)
 	sentMbID, _ := doc["mailbox_id"].(string)
 	outDoc := map[string]any{
-		"mailbox_id":   sentMbID,
-		"from_addr":    from,
-		"to_addr":      to,
-		"subject":      subj,
-		"preview":      text,
-		"body_text":    text,
-		"body_html":    "",
-		"search_text":  strings.ToLower(subj + " " + from + " " + to + " " + text),
-		"thread_id":    mid,
-		"unread":       false,
-		"starred":      false,
-		"resend_id":    sentID,
-		"message_id":   "",
-		"received_for": from,
-		"direction":    "out",
-		"in_reply_to":  mid,
-		"references":   mid,
-		"created_at":   time.Now().UnixMilli(),
+		"mailbox_id":     sentMbID,
+		"from_addr":      from,
+		"to_addr":        to,
+		"subject":        subj,
+		"preview":        truncate(textPart, 200),
+		"body_text":      textPart,
+		"body_html":      htmlPart,
+		"html_sanitized": true,
+		"search_text":    strings.ToLower(subj + " " + from + " " + to + " " + textPart),
+		"thread_id":      mid,
+		"unread":         false,
+		"starred":        false,
+		"resend_id":      sentID,
+		"message_id":     "",
+		"received_for":   from,
+		"direction":      "out",
+		"in_reply_to":    mid,
+		"references":     mid,
+		"created_at":     time.Now().UnixMilli(),
 	}
 	_, err = p.Create("messages", outDoc)
 	if err == nil {

@@ -602,6 +602,31 @@ clearing the open message is now synchronous with the account-switch click
 handler itself (not a reactive effect keyed on `token`), so the stale
 fetch never fires in the first place.
 
+## Reply gets the same rich formats as Compose (2026-08-10)
+
+The reply box only ever sent plain text — no markdown or HTML, unlike
+Compose. Closed the gap by giving `POST /api/reply` a `format` field
+identical to `composeReq.Format` (text/html/markdown) and routing it
+through the same `renderBody` compose.go already uses, so both paths
+produce identical output for the same input. `replyMessage` gained a
+`format` parameter (CLI's `reply` command passes `""` = plain, unchanged);
+the outbound doc now stores `body_html`/`html_sanitized` like compose's
+does, instead of always writing `body_html: ""`.
+
+UI: `MessagePane`'s reply form (components-pane.jsx) got the same format
+tabs, `HtmlWysiwygEditor`, and `MarkdownSplitEditor` `ComposeModal` already
+uses — those two were already standalone top-level components, so this
+was wiring, not new editor code. `switchReplyFormat` mirrors `switchFormat`
+mostly verbatim (carry the draft forward through a real conversion, or
+confirm before it would silently vanish on a format switch).
+
+Verified: `/api/render` (markdown→html) and a `format:"html"` reply both
+reach the Resend-send step correctly (only failing on the test rig's
+unconfigured Resend key, same failure point compose hits) — confirms
+`renderBody` runs and its output reaches the payload; a real browser pass
+confirmed the HTML tab renders the WYSIWYG editor, accepts input, and
+enables Send.
+
 ## Compose formats (v0.3.3+)
 
 `POST /api/compose` takes `format`: `text` (default), `html`, or `markdown`.

@@ -19,6 +19,11 @@ function MessagePane({
 }) {
   const { t, lang } = useI18n();
   const [reply, setReply] = React.useState("");
+  // Plain stays the default here too (see ComposeModal): it's what most
+  // replies are, and it can't be mangled by a converter.
+  const [replyFormat, setReplyFormat] = React.useState("text");
+  const [replyHtml, setReplyHtml] = React.useState("");
+  const [replyHtmlResetKey, setReplyHtmlResetKey] = React.useState(0);
   // Same precedence the server falls back to (reply.go: received_for, then
   // to_addr, then the mailbox's own address) — so what's shown here is what
   // will actually be sent unless the user picks something else.
@@ -27,8 +32,44 @@ function MessagePane({
   const [replyFrom, setReplyFrom] = React.useState(() => defaultReplyFrom(msg));
   React.useEffect(() => {
     setReply("");
+    setReplyFormat("text");
+    setReplyHtml("");
+    setReplyHtmlResetKey((k) => k + 1);
     setReplyFrom(defaultReplyFrom(msg));
   }, [msg?.id]);
+
+  // Mirrors ComposeModal's switchFormat: carry the draft forward through a
+  // real conversion (or ask before it would otherwise silently vanish)
+  // rather than leaving stale, wrongly-interpreted content behind a format
+  // switch.
+  const switchReplyFormat = (next) => {
+    if (next === replyFormat) return;
+    if (replyFormat === "html" && next !== "html") {
+      const hasContent = stripHtmlForCheck(replyHtml).length > 0;
+      if (hasContent && !reply.trim()) {
+        if (!window.confirm(t("switch_format_confirm"))) return;
+        setReplyHtml("");
+        setReplyHtmlResetKey((k) => k + 1);
+      }
+    }
+    if (next === "html" && replyFormat !== "html" && reply.trim() && !stripHtmlForCheck(replyHtml)) {
+      renderBodyPreview(token, reply, replyFormat)
+        .then((d) => {
+          setReplyHtml(d.html || "");
+          setReplyHtmlResetKey((k) => k + 1);
+        })
+        .catch(() => {
+          const escaped = reply
+            .split("\n")
+            .map((line) => "<p>" + escapeHtmlText(line) + "</p>")
+            .join("");
+          setReplyHtml(escaped);
+          setReplyHtmlResetKey((k) => k + 1);
+        });
+    }
+    setReplyFormat(next);
+  };
+  const replyBodyValue = replyFormat === "html" ? replyHtml : reply;
   if (!msg) {
     return (
       <div className="h-full flex items-center justify-center text-ink-dim text-sm">
@@ -149,8 +190,12 @@ function MessagePane({
           className="border-t border-paper-line px-6 py-3 space-y-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!reply.trim() || busy) return;
-            onReply(reply.trim(), replyFrom).then(() => setReply(""));
+            if (!replyBodyValue.trim() || busy) return;
+            onReply(replyBodyValue, replyFrom, replyFormat).then(() => {
+              setReply("");
+              setReplyHtml("");
+              setReplyHtmlResetKey((k) => k + 1);
+            });
           }}
         >
           <label className="block text-xs text-ink-dim">
@@ -187,14 +232,53 @@ function MessagePane({
               <span className="text-ink">{replyFrom || "—"}</span>
             )}
           </label>
-          <textarea
-            value={reply}
-            onChange={(e) => setReply(e.target.value)}
-            rows={3}
-            placeholder={t("reply_placeholder")}
-            className="w-full bg-paper border border-paper-line rounded px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-accent"
-          />
-          <button type="submit" disabled={busy || !reply.trim()} className={btn}>
+          <div className="flex gap-1">
+            {[
+              ["text", t("fmt_plain")],
+              ["markdown", t("fmt_markdown")],
+              ["html", t("fmt_html")],
+            ].map(([value, name]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => switchReplyFormat(value)}
+                className={
+                  "text-[0.7rem] px-2 py-1 rounded border " +
+                  (replyFormat === value
+                    ? "border-accent text-accent bg-accent-soft"
+                    : "border-paper-line text-ink-dim hover:text-ink")
+                }
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          {replyFormat === "html" ? (
+            <HtmlWysiwygEditor
+              initialHtml={replyHtml}
+              resetKey={replyHtmlResetKey}
+              onChange={setReplyHtml}
+              placeholder={t("html_placeholder_wysiwyg")}
+              className="w-full bg-paper border border-paper-line rounded px-4 py-3 text-sm text-ink min-h-[16rem] max-h-[50vh] prose-mail wysiwyg-editable overflow-y-auto focus:outline-none focus:border-accent"
+            />
+          ) : replyFormat === "markdown" ? (
+            <MarkdownSplitEditor
+              value={reply}
+              onChange={setReply}
+              token={token}
+              placeholder={t("md_placeholder")}
+              fieldClass="w-full bg-paper border border-paper-line rounded px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-accent"
+            />
+          ) : (
+            <textarea
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              rows={3}
+              placeholder={t("reply_placeholder")}
+              className="w-full bg-paper border border-paper-line rounded px-3 py-2 text-sm text-ink placeholder:text-ink-dim focus:outline-none focus:border-accent"
+            />
+          )}
+          <button type="submit" disabled={busy || !replyBodyValue.trim()} className={btn}>
             {t("send_reply")}
           </button>
         </form>
