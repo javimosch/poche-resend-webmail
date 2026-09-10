@@ -383,6 +383,12 @@ function buildUnreadCountPath(view, tagView) {
   return "/api/messages/count?" + params.toString();
 }
 
+function buildTagCountPath(tagView) {
+  const params = new URLSearchParams();
+  appendViewLinks(params, "tag", tagView);
+  return "/api/messages/count?" + params.toString();
+}
+
 function composeMail(token, body) {
   return apiFetch(token, "/api/compose", {
     method: "POST",

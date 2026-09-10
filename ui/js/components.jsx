@@ -1,4 +1,4 @@
-function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreateTag, onRenameTag, onDeleteTag, onLogout, token, account, accounts, activeKey, onSwitchAccount, onAddAccount, onRemoveAccount, onComposeClick, brand, onCloseNav }) {
+function Sidebar({ view, tagView, setView, tags, unread, tagCounts, total, status, onCreateTag, onRenameTag, onDeleteTag, onLogout, token, account, accounts, activeKey, onSwitchAccount, onAddAccount, onRemoveAccount, onComposeClick, brand, onCloseNav }) {
   const { t } = useI18n();
   const [newTag, setNewTag] = React.useState("");
   const [tagBusy, setTagBusy] = React.useState(false);
@@ -68,7 +68,8 @@ function Sidebar({ view, tagView, setView, tags, unread, total, status, onCreate
           <TagRow
             key={name}
             name={name}
-            count={unread.tags?.[name] || 0}
+            count={tagCounts?.[name] || 0}
+            unreadCount={unread.tags?.[name] || 0}
             active={view === "tag" && tagView === name}
             navBtn={navBtn}
             label={label}
@@ -560,7 +561,7 @@ function ThemeToggle() {
   );
 }
 
-function TagRow({ name, count, active, navBtn, label, onOpen, onRename, onDelete }) {
+function TagRow({ name, count, unreadCount, active, navBtn, label, onOpen, onRename, onDelete }) {
   const { t } = useI18n();
   const [busy, setBusy] = React.useState(false);
   const act =
@@ -587,7 +588,7 @@ function TagRow({ name, count, active, navBtn, label, onOpen, onRename, onDelete
 
   return (
     <div className="group flex items-center gap-0.5">
-      <button className={navBtn(active, count > 0) + " flex-1 min-w-0 truncate"} onClick={onOpen}>
+      <button className={navBtn(active, unreadCount > 0) + " flex-1 min-w-0 truncate"} onClick={onOpen}>
         {label("#" + name, count)}
       </button>
       <span className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex shrink-0">

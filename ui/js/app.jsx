@@ -20,6 +20,7 @@ function App() {
   const [tagView, setTagView] = useState("");
   const [tags, setTags] = useState([]);
   const [unread, setUnread] = useState({ inbox: 0, archive: 0, tags: {} });
+  const [tagCounts, setTagCounts] = useState({});
   const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
   const [addrField, setAddrField] = useState("");
@@ -68,16 +69,22 @@ function App() {
       const names = (tagNames || tags).filter((t) => t !== "archive");
       const countOne = (v, t) =>
         apiFetch(token, buildUnreadCountPath(v, t)).then((d) => d.count || 0).catch(() => 0);
+      const countTotal = (t) =>
+        apiFetch(token, buildTagCountPath(t)).then((d) => d.count || 0).catch(() => 0);
       Promise.all([
         countOne("inbox", ""),
         countOne("archive", ""),
         ...names.map((name) => countOne("tag", name)),
+        ...names.map((name) => countTotal(name)),
       ]).then((counts) => {
         const tagMap = {};
+        const totalMap = {};
         names.forEach((name, i) => {
           tagMap[name] = counts[2 + i] || 0;
+          totalMap[name] = counts[2 + names.length + i] || 0;
         });
         setUnread({ inbox: counts[0], archive: counts[1], tags: tagMap });
+        setTagCounts(totalMap);
       });
     },
     [token, tags]
@@ -409,6 +416,7 @@ function App() {
       setView={setView}
       tags={tags}
       unread={unread}
+      tagCounts={tagCounts}
       total={total}
       status={status}
       qInput={qInput}

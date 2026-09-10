@@ -4,6 +4,7 @@ function AppLayout({
   setView,
   tags,
   unread,
+  tagCounts,
   total,
   status,
   qInput,
@@ -106,6 +107,7 @@ function AppLayout({
         setView={(v, tag) => { setView(v, tag); setNavOpen(false); }}
         tags={tags}
         unread={unread}
+        tagCounts={tagCounts}
         total={total}
         status={status}
         onCreateTag={onCreateTag}
