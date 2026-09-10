@@ -113,7 +113,7 @@ func startServer(port int) {
 	if err != nil {
 		fail(110, "internal", "embed ui: "+err.Error(), "")
 	}
-	mux.Handle("/", http.FileServer(http.FS(uiSub)))
+	mux.Handle("/", cacheControl(http.FileServer(http.FS(uiSub))))
 
 	fmt.Fprintf(os.Stderr, "{\"event\":\"serve\",\"url\":\"http://127.0.0.1:%d\",\"poche\":%q,\"token_hint\":%q}\n",
 		port, poche.Base, maskSecret(token))
@@ -131,6 +131,16 @@ func withCORS(next http.Handler) http.Handler {
 			w.WriteHeader(204)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// cacheControl adds no-cache headers to static UI files so the browser
+// always revalidates after a deploy, preventing stale JS from causing
+// "Failed to fetch" errors when the API contract changes.
+func cacheControl(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 		next.ServeHTTP(w, r)
 	})
 }
