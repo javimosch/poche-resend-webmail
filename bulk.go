@@ -88,6 +88,7 @@ func handleBulkAPI(w http.ResponseWriter, r *http.Request) {
 				writeJSON(w, 400, map[string]any{"ok": false, "error": "tag required"})
 				return
 			}
+			_ = ensureTagRow(p, req.Tag)
 			err = ensureTag(p, id, req.Tag)
 		case "untag":
 			if req.Tag == "" {
