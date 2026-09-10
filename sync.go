@@ -231,7 +231,39 @@ func upsertInbound(p *Poche, mailboxID string, doc map[string]any) (created bool
 	_ = json.Unmarshal(raw, &wrap)
 	localID, _ := wrap["_id"].(string)
 	_ = upsertAttachments(p, localID, doc)
+	if localID != "" && isSpam(from, subj) {
+		_ = ensureTagRow(p, "spam")
+		_ = ensureTag(p, localID, "spam")
+	}
 	return true, nil
+}
+
+// isSpam detects DMARC reports and fake domain-renewal scam emails.
+// DMARC: from address contains "dmarc" or subject starts with "Report domain:".
+// Spam: subject matches common scam patterns (fake renewal, fake invoice, etc.).
+func isSpam(from, subject string) bool {
+	f := strings.ToLower(from)
+	s := strings.ToLower(subject)
+	if strings.Contains(f, "dmarc") || strings.HasPrefix(s, "report domain:") {
+		return true
+	}
+	scamPatterns := []string{
+		"avis de coupure",
+		"non-paiement du renouvellement",
+		"renouvellement de",
+		"régulariser votre domaine",
+		"risque de suspension",
+		"suspension immédiate",
+		"facture impayée",
+		"interruption de service",
+		"dernier rappel avant expiration",
+	}
+	for _, p := range scamPatterns {
+		if strings.Contains(s, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func findByResendID(p *Poche, resendID string) (string, error) {
