@@ -37,10 +37,10 @@ export RESEND_WEBHOOK_SECRET=…      # optional; empty = insecure accept (dev)
 
 ## Persistence policy (v0.2.0+)
 
-The webmail layer keeps full email bodies in poche. **`retention_months: 0` does not mean "keep forever."** Zero is read as *unset*
-and falls back to `MAILBOX_RETENTION_MONTHS` (default 3), same for
-`max_messages` / `max_bytes` at 0. To actually keep mail indefinitely, set a
-large value (e.g. `--retention-months 1200`). The effective policy is reported
+The webmail layer keeps full email bodies in poche. **`retention_months: 0` means "keep forever" (no retention limit).** Same for
+`max_messages: 0` (no count limit) and `max_bytes: 0` (no size limit).
+If a field is *absent* from the mailbox doc, it falls back to the env
+default (`MAILBOX_RETENTION_MONTHS`, etc.). The effective policy is reported
 by `GET /api/mailbox/usage` and shown under the storage bar in the sidebar.
 
 Note also that nothing purges on its own: `cleanup` runs only when invoked

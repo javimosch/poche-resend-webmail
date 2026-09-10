@@ -87,11 +87,16 @@ func listMailboxes(p *Poche) ([]mailbox, error) {
 }
 
 func cleanupMailbox(p *Poche, mb mailbox) (int, string, error) {
-	retention := mailboxFloat(mb.Doc, "retention_months", envFloat("MAILBOX_RETENTION_MONTHS", defaultRetentionMonths))
-	maxMsg := mailboxInt(mb.Doc, "max_messages", envInt("MAILBOX_MAX_MESSAGES", defaultMaxMessages))
-	maxBytes := mailboxInt64(mb.Doc, "max_bytes", envInt64("MAILBOX_MAX_BYTES", defaultMaxBytes))
+	// 0 means "no limit" (keep forever), not "unset, use default".
+	// mailboxFloatOrEnv returns (value, wasSet) so we can distinguish.
+	retention, _ := mailboxFloatOrEnv(mb.Doc, "retention_months", "MAILBOX_RETENTION_MONTHS", defaultRetentionMonths)
+	maxMsg, _ := mailboxIntOrEnv(mb.Doc, "max_messages", "MAILBOX_MAX_MESSAGES", defaultMaxMessages)
+	maxBytes, _ := mailboxInt64OrEnv(mb.Doc, "max_bytes", "MAILBOX_MAX_BYTES", defaultMaxBytes)
 
-	cutoff := time.Now().UnixMilli() - int64(retention*30*24*60*60*1000)
+	var cutoff int64
+	if retention > 0 {
+		cutoff = time.Now().UnixMilli() - int64(retention*30*24*60*60*1000)
+	}
 
 	msgs, totalCount, totalBytes, err := loadMailboxMessages(p, mb.ID)
 	if err != nil {
@@ -103,13 +108,13 @@ func cleanupMailbox(p *Poche, mb mailbox) (int, string, error) {
 	for _, m := range msgs {
 		del := false
 		r := ""
-		if m.createdAt < cutoff {
+		if retention > 0 && m.createdAt < cutoff {
 			del = true
 			r = "retention"
-		} else if totalCount > maxMsg {
+		} else if maxMsg > 0 && totalCount > maxMsg {
 			del = true
 			r = "count"
-		} else if totalBytes > maxBytes {
+		} else if maxBytes > 0 && totalBytes > maxBytes {
 			del = true
 			r = "bytes"
 		}
@@ -247,6 +252,18 @@ func mailboxFloat(doc map[string]any, key string, fallback float64) float64 {
 	return fallback
 }
 
+// mailboxFloatOrEnv returns (value, wasSet). If the field is present in the
+// doc (even if 0), that value is used. If absent, fall back to env, then
+// default. This fixes the bug where retention_months=0 was treated as
+// "unset" and fell back to the 3-month default, purging mail that should
+// have been kept forever.
+func mailboxFloatOrEnv(doc map[string]any, key, envKey string, def float64) (float64, bool) {
+	if _, ok := doc[key]; ok {
+		return numField(doc, key), true
+	}
+	return envFloat(envKey, def), false
+}
+
 func mailboxInt(doc map[string]any, key string, fallback int) int {
 	v := int(numField(doc, key))
 	if v != 0 {
@@ -255,12 +272,26 @@ func mailboxInt(doc map[string]any, key string, fallback int) int {
 	return fallback
 }
 
+func mailboxIntOrEnv(doc map[string]any, key, envKey string, def int) (int, bool) {
+	if _, ok := doc[key]; ok {
+		return int(numField(doc, key)), true
+	}
+	return envInt(envKey, def), false
+}
+
 func mailboxInt64(doc map[string]any, key string, fallback int64) int64 {
 	v := int64(numField(doc, key))
 	if v != 0 {
 		return v
 	}
 	return fallback
+}
+
+func mailboxInt64OrEnv(doc map[string]any, key, envKey string, def int64) (int64, bool) {
+	if _, ok := doc[key]; ok {
+		return int64(numField(doc, key)), true
+	}
+	return envInt64(envKey, def), false
 }
 
 func numField(m map[string]any, k string) float64 {
