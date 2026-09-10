@@ -357,6 +357,21 @@ function App() {
     setAttachments([]);
   };
 
+  // Auto-refresh: poll for new messages every 60s when the tab is visible.
+  // Uses the Visibility API so it doesn't waste requests in a background tab.
+  useEffect(() => {
+    if (!token) return;
+    let timer = null;
+    const tick = () => {
+      if (document.visibilityState === "visible") {
+        loadList();
+        loadUnread();
+      }
+    };
+    timer = setInterval(tick, 60000);
+    return () => clearInterval(timer);
+  }, [token, loadList, loadUnread]);
+
   if (err) return <div className="p-8 text-red-400">{t("config_error", err)}</div>;
   if (!cfg) return <div className="p-8 text-ink-muted">{t("booting")}</div>;
   if (!token || addingAccount) {
@@ -452,6 +467,7 @@ function App() {
       sendCatchallDomain={sendCatchallDomain}
       sendSeenAddresses={sendSeenAddresses}
       onCompose={onCompose}
+      onRefresh={refreshAfter}
     />
   );
 }

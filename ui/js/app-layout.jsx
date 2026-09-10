@@ -62,6 +62,7 @@ function AppLayout({
   sendCatchallDomain,
   sendSeenAddresses,
   onCompose,
+  onRefresh,
 }) {
   const { t } = useI18n();
   // Below md the three panes do not fit side by side: the sidebar becomes a
@@ -127,6 +128,14 @@ function AppLayout({
         <div className="px-4 py-3 border-b border-paper-line flex items-center justify-between">
           <span className="text-sm text-ink-muted">{viewLabel(view, tagView, t)}</span>
           <div className="flex gap-1 items-center">
+            <button
+              onClick={onRefresh}
+              className="text-xs px-2 py-1 border border-paper-line rounded hover:border-accent hover:text-accent"
+              aria-label={t("refresh")}
+              title={t("refresh")}
+            >
+              ↻
+            </button>
             <button
               disabled={offset <= 0}
               onClick={() => setOffset(Math.max(0, offset - pageSize))}
