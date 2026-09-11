@@ -418,6 +418,7 @@ function App() {
   }
 
   return (
+    <>
     <AppLayout
       view={view}
       tagView={tagView}
@@ -493,7 +494,7 @@ function App() {
       token={token}
       onTagged={refreshAfter}
     />
-  );
+    </>
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(
