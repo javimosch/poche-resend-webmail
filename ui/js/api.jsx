@@ -1,6 +1,11 @@
 const LINK_ARCHIVE = "message_tags.message_id:tag=archive";
 const LINK_SPAM = "message_tags.message_id:tag=spam";
 
+// Module-level tag list — updated by the app when tags load.
+// Used to exclude all tagged messages from the inbox view.
+let _allTags = [];
+function setAllTags(tags) { _allTags = tags || []; }
+
 // ─── multi-account session store ───────────────────────────────────────
 // Each logged-in mailbox keeps its own session token, all stored together,
 // so switching accounts (like Proton's account switcher) never needs to
@@ -340,7 +345,14 @@ function appendViewLinks(params, view, tagView) {
     params.append("has_link", "message_tags.message_id:tag=" + tagView);
   } else if (view !== "sent") {
     params.append("missing_link", LINK_ARCHIVE);
-    if (view === "inbox") params.append("missing_link", LINK_SPAM);
+    if (view === "inbox") {
+      // Exclude all tagged messages from the inbox — any message with
+      // any user tag is hidden. Only untagged messages appear here.
+      _allTags.forEach((name) => {
+        if (name === "archive") return;
+        params.append("missing_link", "message_tags.message_id:tag=" + name);
+      });
+    }
   }
 }
 
