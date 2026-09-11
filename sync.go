@@ -239,6 +239,15 @@ func upsertInbound(p *Poche, mailboxID string, doc map[string]any) (created bool
 		_ = ensureTagRow(p, "dmarc")
 		_ = ensureTag(p, localID, "dmarc")
 	}
+	// Auto-categorize non-spam messages (Gmail-style: social, promo, updates).
+	// Primary = no tag (stays in inbox). Categorized messages are hidden from
+	// inbox via the "hide all tagged" rule and appear in their tag view instead.
+	if localID != "" && !isSpam(from, subj) {
+		if cat := categorize(from, subj, text); cat != "" {
+			_ = ensureTagRow(p, cat)
+			_ = ensureTag(p, localID, cat)
+		}
+	}
 	return true, nil
 }
 
@@ -276,6 +285,87 @@ func isDMARC(from, subject string) bool {
 	f := strings.ToLower(from)
 	s := strings.ToLower(subject)
 	return strings.Contains(f, "dmarc") || strings.HasPrefix(s, "report domain:")
+}
+
+// categorize assigns a Gmail-style category tag based on sender whitelists
+// and subject/body keywords. Returns "" for Primary (no category).
+// Best-effort — false positives are expected and the user can untag.
+func categorize(from, subject, body string) string {
+	f := strings.ToLower(from)
+	s := strings.ToLower(subject)
+	b := strings.ToLower(body)
+
+	// ─── Social: sender domain whitelists ───────────────────────────
+	socialDomains := []string{
+		"linkedin.com", "facebook.com", "instagram.com",
+		"twitter.com", "x.com", "youtube.com", "youtu.be",
+		"reddit.com", "github.com", "gitlab.com",
+		"medium.com", "tiktok.com", "pinterest.com",
+		"mastodon", "bsky.app", "bluesky",
+		"discord.com", "telegram.org",
+	}
+	for _, d := range socialDomains {
+		if strings.Contains(f, d) {
+			return "social"
+		}
+	}
+
+	// ─── Updates: receipts, security, service notifications ─────────
+	updateSenders := []string{
+		"stripe.com", "resend.com", "letsencrypt.org",
+		"cloudflare.com", "github.com", "gitlab.com",
+		"amazonaws.com", "google.com", "microsoft.com",
+		"no-reply", "noreply", "donotreply", "notification",
+	}
+	updateKeywords := []string{
+		"receipt", "invoice", "order confirmation", "shipped",
+		"delivery", "tracking", "your order", "payment received",
+		"security alert", "verification code", "2fa", "two-factor",
+		"password reset", "account alert", "suspicious activity",
+		"certificate", "ssl expir", "domain expir",
+		"backup complete", "deployment", "build failed",
+		"cron", "scheduled", "uptime", "incident", "status page",
+	}
+	for _, d := range updateSenders {
+		if strings.Contains(f, d) {
+			return "updates"
+		}
+	}
+	for _, kw := range updateKeywords {
+		if strings.Contains(s, kw) {
+			return "updates"
+		}
+	}
+
+	// ─── Promo: newsletters, marketing, deals ───────────────────────
+	promoSenders := []string{
+		"newsletter", "marketing", "promo", "noreply",
+		"mail.", "email.", "news@", "digest@",
+	}
+	promoSubjectKeywords := []string{
+		"newsletter", "unsubscribe", "deal", "sale", "discount",
+		"offer", "promotion", "limited time", "save up to",
+		"% off", "free shipping", "black friday", "cyber monday",
+		"exclusive", "members only", "early access", "new arrival",
+		"weekly digest", "monthly roundup", "top picks",
+	}
+	for _, d := range promoSenders {
+		if strings.Contains(f, d) {
+			return "promo"
+		}
+	}
+	for _, kw := range promoSubjectKeywords {
+		if strings.Contains(s, kw) {
+			return "promo"
+		}
+	}
+	// Body keywords are weaker — only check if no subject match yet.
+	// "unsubscribe" in body is a strong promo signal.
+	if strings.Contains(b, "unsubscribe") || strings.Contains(b, "manage your preferences") {
+		return "promo"
+	}
+
+	return "" // Primary
 }
 
 func findByResendID(p *Poche, resendID string) (string, error) {
