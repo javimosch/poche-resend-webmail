@@ -192,7 +192,18 @@ function App() {
       .then((data) => {
         const doc = data.doc || data;
         const id = data.id || data._id || selected;
-        setMsg(Object.assign({ id }, typeof doc === "string" ? JSON.parse(doc) : doc));
+        const m = Object.assign({ id }, typeof doc === "string" ? JSON.parse(doc) : doc);
+        setMsg(m);
+        // Auto-mark as read when a message is opened
+        if (m.unread) {
+          bulkFetch(token, { action: "mark_read", ids: [id] })
+            .then(() => {
+              setMsg((prev) => (prev && prev.id === id ? Object.assign({}, prev, { unread: false }) : prev));
+              setItems((prev) => prev.map((it) => (it.id === id ? Object.assign({}, it, { unread: false, anyUnread: false }) : it)));
+              loadUnread();
+            })
+            .catch(() => {});
+        }
       })
       .catch((e) => console.error(e));
     loadMsgMeta(selected);

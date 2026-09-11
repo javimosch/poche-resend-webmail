@@ -67,6 +67,13 @@ Needs Linux/amd64 for the prebuilt `poche` binary. On other platforms, build
 - **The browser only ever talks to the BFF.** Resend keys and store tokens stay
   on the server.
 
+**Self-hosted, no shared backend.** `poche` here is not a remote service —
+`bootstrap.sh` downloads (or builds) the binary and runs it as a local
+process alongside the BFF, storing everything under `./.webmail`. Each
+deployment carries its own poche instance; nothing talks to a
+central/intrane poche. See [poche](https://github.com/javimosch/poche) for
+the store itself.
+
 ## Running it for real
 
 1. **Verify a domain in Resend** and enable receiving. Their auto-configure
