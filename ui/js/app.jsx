@@ -495,6 +495,7 @@ function App() {
       onTagged={refreshAfter}
     />
     </>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(
