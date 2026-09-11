@@ -603,3 +603,91 @@ function TagRow({ name, count, unreadCount, active, navBtn, label, onOpen, onRen
   );
 }
 
+function TagSimilarModal({ open, onClose, fromAddr, tagName, token, onTagged }) {
+  const { t } = useI18n();
+  const [subjectFilter, setSubjectFilter] = React.useState("");
+  const [matchCount, setMatchCount] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+
+  // Fetch count of messages from same sender, not already tagged, with optional subject filter
+  React.useEffect(() => {
+    if (!open || !token || !fromAddr) return;
+    const where = ["from_addr=" + fromAddr];
+    if (subjectFilter.trim()) where.push("search_text~=" + subjectFilter.trim().toLowerCase());
+    const params = new URLSearchParams();
+    params.set("where", where.join(","));
+    params.append("missing_link", "message_tags.message_id:tag=" + tagName);
+    apiFetch(token, "/api/messages/count?" + params.toString())
+      .then((d) => setMatchCount(d.count || 0))
+      .catch(() => setMatchCount(0));
+  }, [open, token, fromAddr, tagName, subjectFilter]);
+
+  if (!open) return null;
+
+  const apply = () => {
+    setBusy(true);
+    bulkFetch(token, {
+      action: "tag",
+      tag: tagName,
+      from_addr: fromAddr,
+      subject_contains: subjectFilter.trim() || undefined,
+    })
+      .then(() => {
+        onTagged();
+        onClose();
+      })
+      .catch((e) => console.error(e))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="bg-paper-raised border border-paper-line rounded-lg shadow-xl max-w-md w-full mx-4 p-5 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-display text-lg text-ink">{t("tag_similar_title")}</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-ink-dim block mb-1">{t("tag_similar_from")}</label>
+            <input
+              value={fromAddr}
+              readOnly
+              className="w-full bg-paper border border-paper-line rounded px-2 py-1.5 text-sm text-ink-muted"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink-dim block mb-1">{t("tag_similar_subject")}</label>
+            <input
+              value={subjectFilter}
+              onChange={(e) => setSubjectFilter(e.target.value)}
+              placeholder=""
+              className="w-full bg-paper border border-paper-line rounded px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
+            />
+          </div>
+          <div className="text-sm text-ink-muted">
+            {matchCount === null ? "…" : matchCount === 0
+              ? t("tag_similar_no_match")
+              : t("tag_similar_count", matchCount) + " " + t("tag_similar_with") + " #" + tagName}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            onClick={onClose}
+            className="text-xs px-3 py-1.5 rounded border border-paper-line text-ink-muted hover:border-accent hover:text-accent"
+          >
+            {t("cancel")}
+          </button>
+          <button
+            onClick={apply}
+            disabled={busy || !matchCount}
+            className="text-xs px-3 py-1.5 rounded bg-accent text-white hover:opacity-90 disabled:opacity-30"
+          >
+            {matchCount ? t("tag_similar_apply", matchCount) : t("tag_similar_no_match")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

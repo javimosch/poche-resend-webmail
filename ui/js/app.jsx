@@ -21,6 +21,7 @@ function App() {
   const [tags, setTags] = useState([]);
   const [unread, setUnread] = useState({ inbox: 0, archive: 0, tags: {} });
   const [tagCounts, setTagCounts] = useState({});
+  const [tagSimilar, setTagSimilar] = useState(null);
   const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
   const [addrField, setAddrField] = useState("");
@@ -233,6 +234,7 @@ function App() {
   const onBulk = (action, tag) => {
     const ctx = ctxRef.current;
     if (!selectAllPages && !checked.length) return;
+    const singleId = checked.length === 1 ? checked[0] : null;
     setBusy(true);
     const body = { action, ids: checked };
     if (tag) body.tag = tag;
@@ -246,6 +248,12 @@ function App() {
       .then(() => {
         if (selected && (selectAllPages || checked.includes(selected))) setSelected(null);
         refreshAfter();
+        // After tagging a single message, check for similar untagged messages
+        // from the same sender and offer to tag them too.
+        if (action === "tag" && tag && singleId && msg) {
+          const from = msg.from_addr;
+          if (from) setTagSimilar({ fromAddr: from, tagName: tag });
+        }
       })
       .catch((e) => console.error(e))
       .finally(() => setBusy(false));
@@ -476,6 +484,14 @@ function App() {
       sendSeenAddresses={sendSeenAddresses}
       onCompose={onCompose}
       onRefresh={refreshAfter}
+    />
+    <TagSimilarModal
+      open={!!tagSimilar}
+      onClose={() => setTagSimilar(null)}
+      fromAddr={tagSimilar?.fromAddr || ""}
+      tagName={tagSimilar?.tagName || ""}
+      token={token}
+      onTagged={refreshAfter}
     />
   );
 }

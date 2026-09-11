@@ -17,6 +17,10 @@ type bulkReq struct {
 	TagView  string `json:"tag_view"`
 	Q        string `json:"q"`
 	AllPages bool   `json:"all_pages"`
+	// Similar-message filter: tag all from same sender, optionally with
+	// subject containing a substring. Used by the "tag similar" modal.
+	FromAddr      string `json:"from_addr"`
+	SubjectContains string `json:"subject_contains"`
 }
 
 func handleBulkAPI(w http.ResponseWriter, r *http.Request) {
@@ -38,9 +42,14 @@ func handleBulkAPI(w http.ResponseWriter, r *http.Request) {
 	isAdmin := authIsAdmin(r)
 
 	ids := req.IDs
-	if req.Action == "mark_read_all" || req.AllPages {
+	if req.Action == "mark_read_all" || req.AllPages || req.FromAddr != "" {
 		var err error
-		ids, err = collectIDsLinked(p, req.View, req.TagView, req.Q, mbID, isAdmin)
+		if req.FromAddr != "" {
+			has, missing := viewLinks(req.View, req.TagView)
+			ids, err = collectIDsFiltered(p, has, missing, "", req.FromAddr, req.SubjectContains, mbID, isAdmin)
+		} else {
+			ids, err = collectIDsLinked(p, req.View, req.TagView, req.Q, mbID, isAdmin)
+		}
 		if err != nil {
 			writeJSON(w, 500, map[string]any{"ok": false, "error": err.Error()})
 			return
@@ -376,17 +385,28 @@ func filterIDsOwnedByMailbox(p *Poche, ids []string, mbID string) []string {
 
 func collectIDsLinked(p *Poche, view, tagView, q string, mbID string, isAdmin bool) ([]string, error) {
 	has, missing := viewLinks(view, tagView)
-	where := ""
+	return collectIDsFiltered(p, has, missing, q, "", "", mbID, isAdmin)
+}
+
+// collectIDsFiltered is the generalized collector used by both the
+// all_pages bulk path (from view/tagView/q) and the "tag similar" path
+// (from from_addr + subject_contains). The where clause is built from
+// search text, from_addr, and subject_contains, then mailbox-scoped.
+func collectIDsFiltered(p *Poche, has, missing []string, q, fromAddr, subjectContains, mbID string, isAdmin bool) ([]string, error) {
+	var clauses []string
 	if needle := sanitizeQ(q); needle != "" {
-		where = "search_text~=" + needle
+		clauses = append(clauses, "search_text~="+needle)
+	}
+	if fromAddr != "" {
+		clauses = append(clauses, "from_addr="+fromAddr)
+	}
+	if subjectContains != "" {
+		clauses = append(clauses, "search_text~="+strings.ToLower(subjectContains))
 	}
 	if !isAdmin && mbID != "" {
-		if where != "" {
-			where += ",mailbox_id=" + mbID
-		} else {
-			where = "mailbox_id=" + mbID
-		}
+		clauses = append(clauses, "mailbox_id="+mbID)
 	}
+	where := strings.Join(clauses, ",")
 	out := []string{}
 	offset := 0
 	for {
