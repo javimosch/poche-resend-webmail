@@ -235,6 +235,10 @@ func upsertInbound(p *Poche, mailboxID string, doc map[string]any) (created bool
 		_ = ensureTagRow(p, "spam")
 		_ = ensureTag(p, localID, "spam")
 	}
+	if localID != "" && isDMARC(from, subj) {
+		_ = ensureTagRow(p, "dmarc")
+		_ = ensureTag(p, localID, "dmarc")
+	}
 	return true, nil
 }
 
@@ -264,6 +268,14 @@ func isSpam(from, subject string) bool {
 		}
 	}
 	return false
+}
+
+// isDMARC detects DMARC report emails. Best-effort: from address contains
+// "dmarc" or subject starts with "Report domain:".
+func isDMARC(from, subject string) bool {
+	f := strings.ToLower(from)
+	s := strings.ToLower(subject)
+	return strings.Contains(f, "dmarc") || strings.HasPrefix(s, "report domain:")
 }
 
 func findByResendID(p *Poche, resendID string) (string, error) {
