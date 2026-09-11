@@ -1,4 +1,5 @@
 const LINK_ARCHIVE = "message_tags.message_id:tag=archive";
+const LINK_SPAM = "message_tags.message_id:tag=spam";
 
 // ─── multi-account session store ───────────────────────────────────────
 // Each logged-in mailbox keeps its own session token, all stored together,
@@ -339,6 +340,7 @@ function appendViewLinks(params, view, tagView) {
     params.append("has_link", "message_tags.message_id:tag=" + tagView);
   } else if (view !== "sent") {
     params.append("missing_link", LINK_ARCHIVE);
+    if (view === "inbox") params.append("missing_link", LINK_SPAM);
   }
 }
 
