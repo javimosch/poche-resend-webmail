@@ -606,21 +606,23 @@ function TagRow({ name, count, unreadCount, active, navBtn, label, onOpen, onRen
 function TagSimilarModal({ open, onClose, fromAddr, tagName, token, onTagged }) {
   const { t } = useI18n();
   const [subjectFilter, setSubjectFilter] = React.useState("");
+  const [bodyFilter, setBodyFilter] = React.useState("");
   const [matchCount, setMatchCount] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
 
-  // Fetch count of messages from same sender, not already tagged, with optional subject filter
+  // Fetch count of messages from same sender, not already tagged, with optional subject/body filter
   React.useEffect(() => {
     if (!open || !token || !fromAddr) return;
     const where = ["from_addr=" + fromAddr];
     if (subjectFilter.trim()) where.push("search_text~=" + subjectFilter.trim().toLowerCase());
+    if (bodyFilter.trim()) where.push("search_text~=" + bodyFilter.trim().toLowerCase());
     const params = new URLSearchParams();
     params.set("where", where.join(","));
     params.append("missing_link", "message_tags.message_id:tag=" + tagName);
     apiFetch(token, "/api/messages/count?" + params.toString())
       .then((d) => setMatchCount(d.count || 0))
       .catch(() => setMatchCount(0));
-  }, [open, token, fromAddr, tagName, subjectFilter]);
+  }, [open, token, fromAddr, tagName, subjectFilter, bodyFilter]);
 
   if (!open) return null;
 
@@ -631,6 +633,7 @@ function TagSimilarModal({ open, onClose, fromAddr, tagName, token, onTagged }) 
       tag: tagName,
       from_addr: fromAddr,
       subject_contains: subjectFilter.trim() || undefined,
+      body_contains: bodyFilter.trim() || undefined,
     })
       .then(() => {
         onTagged();
@@ -661,6 +664,15 @@ function TagSimilarModal({ open, onClose, fromAddr, tagName, token, onTagged }) 
             <input
               value={subjectFilter}
               onChange={(e) => setSubjectFilter(e.target.value)}
+              placeholder=""
+              className="w-full bg-paper border border-paper-line rounded px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink-dim block mb-1">{t("tag_similar_body")}</label>
+            <input
+              value={bodyFilter}
+              onChange={(e) => setBodyFilter(e.target.value)}
               placeholder=""
               className="w-full bg-paper border border-paper-line rounded px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
             />

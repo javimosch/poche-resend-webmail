@@ -18,9 +18,10 @@ type bulkReq struct {
 	Q        string `json:"q"`
 	AllPages bool   `json:"all_pages"`
 	// Similar-message filter: tag all from same sender, optionally with
-	// subject containing a substring. Used by the "tag similar" modal.
-	FromAddr      string `json:"from_addr"`
+	// subject and/or body containing a substring. Used by the "tag similar" modal.
+	FromAddr        string `json:"from_addr"`
 	SubjectContains string `json:"subject_contains"`
+	BodyContains    string `json:"body_contains"`
 }
 
 func handleBulkAPI(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +47,7 @@ func handleBulkAPI(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if req.FromAddr != "" {
 			has, missing := viewLinks(req.View, req.TagView)
-			ids, err = collectIDsFiltered(p, has, missing, "", req.FromAddr, req.SubjectContains, mbID, isAdmin)
+			ids, err = collectIDsFiltered(p, has, missing, "", req.FromAddr, req.SubjectContains, req.BodyContains, mbID, isAdmin)
 		} else {
 			ids, err = collectIDsLinked(p, req.View, req.TagView, req.Q, mbID, isAdmin)
 		}
@@ -385,14 +386,15 @@ func filterIDsOwnedByMailbox(p *Poche, ids []string, mbID string) []string {
 
 func collectIDsLinked(p *Poche, view, tagView, q string, mbID string, isAdmin bool) ([]string, error) {
 	has, missing := viewLinks(view, tagView)
-	return collectIDsFiltered(p, has, missing, q, "", "", mbID, isAdmin)
+	return collectIDsFiltered(p, has, missing, q, "", "", "", mbID, isAdmin)
 }
 
 // collectIDsFiltered is the generalized collector used by both the
 // all_pages bulk path (from view/tagView/q) and the "tag similar" path
-// (from from_addr + subject_contains). The where clause is built from
-// search text, from_addr, and subject_contains, then mailbox-scoped.
-func collectIDsFiltered(p *Poche, has, missing []string, q, fromAddr, subjectContains, mbID string, isAdmin bool) ([]string, error) {
+// (from from_addr + subject_contains + body_contains). The where clause
+// is built from search text, from_addr, subject_contains, and body_contains,
+// then mailbox-scoped.
+func collectIDsFiltered(p *Poche, has, missing []string, q, fromAddr, subjectContains, bodyContains, mbID string, isAdmin bool) ([]string, error) {
 	var clauses []string
 	if needle := sanitizeQ(q); needle != "" {
 		clauses = append(clauses, "search_text~="+needle)
@@ -402,6 +404,9 @@ func collectIDsFiltered(p *Poche, has, missing []string, q, fromAddr, subjectCon
 	}
 	if subjectContains != "" {
 		clauses = append(clauses, "search_text~="+strings.ToLower(subjectContains))
+	}
+	if bodyContains != "" {
+		clauses = append(clauses, "search_text~="+strings.ToLower(bodyContains))
 	}
 	if !isAdmin && mbID != "" {
 		clauses = append(clauses, "mailbox_id="+mbID)
