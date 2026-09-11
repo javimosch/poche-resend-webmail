@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Changelog August 2026 - poche-resend-webmail</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+      body { font-family: 'Geist', system-ui, sans-serif; background-color: #050505; color: #e2e8f0; }
+      h1, h2, h3 { font-family: 'Geist', system-ui, sans-serif; }
+      .tab-btn { transition: all 0.2s ease; }
+      .tab-btn.active { background-color: #1a1a1d; border-color: #3b82f6; color: #fff; }
+      .tab-content { display: none; animation: fadeIn 0.3s ease; }
+      .tab-content.active { display: block; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+      .feature-card { background: linear-gradient(135deg, #1a1a1d 0%, #151517 100%); border: 1px solid #262629; transition: all 0.3s ease; }
+      .feature-card:hover { border-color: #3b82f6; transform: translateY(-2px); }
+    </style>
+  </head>
+  <body class="bg-[#0a0a0b] min-h-screen">
+    <div class="max-w-5xl mx-auto px-6 py-24">
+      <header class="mb-16">
+        <a href="changelog.html" class="inline-flex items-center gap-1 text-sm text-white/30 hover:text-white/70 text-sm mb-6 inline-block transition-colors"><span class="text-xs">&larr; Back tolarr;</span> Back to Changelog <span class="text-[10px]">→</span></a>
+        <h1 class="text-5xl font-bold text-white mt-4 tracking-tight">Changelog</h1>
+        <p class="text-white/40 mt-3 text-lg">August 2026</p>
+        
+        <!-- Tabs -->
+        <div class="flex gap-2 mt-8">
+          <button onclick="switchTab('product')" id="tab-product" class="tab-btn active px-5 py-2.5 rounded-lg border border-slate-700 text-slate-300 font-medium text-sm hover:border-slate-600">
+            Product
+          </button>
+          <button onclick="switchTab('technical')" id="tab-technical" class="tab-btn px-5 py-2.5 rounded-lg border border-slate-700 text-slate-300 font-medium text-sm hover:border-slate-600">
+            Technical
+          </button>
+        </div>
+      </header>
+
+      <!-- Product Changelog -->
+      <div id="content-product" class="tab-content active">
+## v0.3.6 release — compose, threading, multi-account
+
+- **Conversation threading** — Gmail-style thread collapsing in the inbox, full thread view in the message pane
+- **Multi-account switcher** — log into a second mailbox without losing the first session (Proton-style)
+- **Catch-all domain mailboxes** — one mailbox claims an entire domain; any unmatched address routes to it
+- **Rich compose** — WYSIWYG HTML editor, live Markdown split preview, full-screen minimizable modal
+- **Attachments** — send attachments (streamed to Resend), sent copies keep attachment bytes
+- **Inbox filtering** — address badge + filter by recipient or sender
+- **Reply improvements** — plain/markdown/HTML formats, editable From for catch-all mailboxes
+- **Security fix** — cross-tenant IDOR patched; signed-in tenants can no longer manipulate another tenant's mail
+- **Attachment fix** — inbound attachment content now extracted from raw RFC822 (the `download_url` field never existed)
+
+      </div>
+
+      <!-- Technical Changelog -->
+      <div id="content-technical" class="tab-content">
+        <div class="space-y-8">
+
+        <section>
+          <h2 class="text-2xl font-semibold text-brand-400 mb-4 flex items-center gap-2">
+            <span>🚀</span> Features
+          </h2>
+          <ul class="space-y-2 text-slate-300">
+            <li><span class="text-slate-500 text-sm mr-3">[10/08]</span>feat: inbox list collapses by thread, Gmail-style</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/08]</span>feat: Gmail-style conversation threading, in the message pane</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/08]</span>feat: reply gets the same rich formats as compose (plain/markdown/HTML)</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/08]</span>feat: editable reply From for catch-all mailboxes; fix real cross-tenant IDOR found along the way</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/08]</span>feat: multi-account switcher, like Proton's — logging into a second mailbox no longer costs you the first one's session</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/08]</span>feat: inbox address badge + filter by recipient/sender (issue #2)</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/08]</span>feat: catch-all domain mailboxes (issue #1)</li>
+            <li><span class="text-slate-500 text-sm mr-3">[08/08]</span>feat: widen compose modal to fill the viewport, make it minimizable</li>
+            <li><span class="text-slate-500 text-sm mr-3">[08/08]</span>feat: real WYSIWYG editor for HTML compose, live split preview for Markdown</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat: keep sent attachments, and fix three envelope bugs they exposed</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat: send attachments (streamed to Resend, not stored)</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat(ui): per-tenant brand, mobile layout, quieter sidebar</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat(ui): English/French interface with a language switch</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat: surface the retention policy in the UI, and correct its docs</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat: log destructive bulk actions</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat: tag rename/delete, click-to-copy address, Markdown and HTML compose</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat(ui): light theme and larger base type</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat: encrypt tenant Resend credentials at rest</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat: accept the mailbox password from stdin or env</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>feat: sanitize inbound HTML, per-tenant reset links, webhook logging</li>
+            <li><span class="text-slate-500 text-sm mr-3">[05/08]</span>feat: compose (new mail) + per-mailbox Resend credentials</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-red-400 mb-4 flex items-center gap-2">
+            <span>🐛</span> Bug Fixes
+          </h2>
+          <ul class="space-y-2 text-slate-300">
+            <li><span class="text-slate-500 text-sm mr-3">[10/08]</span>fix: starring has never actually worked from the UI</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/08]</span>fix: compose From stuck on the previous account; allow send/reply-as any address for catch-all mailboxes</li>
+            <li><span class="text-slate-500 text-sm mr-3">[09/08]</span>fix: inbound attachment content — the download_url assumption was wrong</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>fix: log when inbound content cannot be fetched, and stop calling it 'not kept'</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>fix: smoke.sh failed intermittently on SIGPIPE</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>fix: make the sanitize migration idempotent</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>fix: migrate mailbox schema from the CLI, and don't panic on short tokens</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-emerald-400 mb-4 flex items-center gap-2">
+            <span>📚</span> Documentation
+          </h2>
+          <ul class="space-y-2 text-slate-300">
+            <li><span class="text-slate-500 text-sm mr-3">[08/08]</span>docs: scope attachment storage migration to machin-esetres</li>
+            <li><span class="text-slate-500 text-sm mr-3">[07/08]</span>docs: drop the broken-poche warning, fixed upstream in poche v0.3.1</li>
+            <li><span class="text-slate-500 text-sm mr-3">[07/08]</span>docs: outward-facing README, one-command bootstrap, screenshots</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-blue-400 mb-4 flex items-center gap-2">
+            <span>🧪</span> Testing
+          </h2>
+          <ul class="space-y-2 text-slate-300">
+            <li><span class="text-slate-500 text-sm mr-3">[07/08]</span>test: add unit tests for compose/markdown/credentials + CI workflow</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-white/40 mb-4 flex items-center gap-2">
+            <span>⚙️</span> Miscellaneous Tasks
+          </h2>
+          <ul class="space-y-2 text-slate-300">
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>chore: log the Host a webhook arrived on</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-purple-400 mb-4 flex items-center gap-2">
+            <span>💼</span> Other
+          </h2>
+          <ul class="space-y-2 text-slate-300">
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>release: v0.3.6</li>
+            <li><span class="text-slate-500 text-sm mr-3">[06/08]</span>Merge: compose, multi-tenant Resend, HTML sanitizing, webhook hardening</li>
+          </ul>
+        </section>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function switchTab(tab) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById('content-' + tab).classList.add('active');
+        document.getElementById('tab-' + tab).classList.add('active');
+      }
+    </script>
+  </body>
+</html>

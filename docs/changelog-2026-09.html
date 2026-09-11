@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Changelog September 2026 - poche-resend-webmail</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+      body { font-family: 'Geist', system-ui, sans-serif; background-color: #050505; color: #e2e8f0; }
+      h1, h2, h3 { font-family: 'Geist', system-ui, sans-serif; }
+      .tab-btn { transition: all 0.2s ease; }
+      .tab-btn.active { background-color: #1a1a1d; border-color: #3b82f6; color: #fff; }
+      .tab-content { display: none; animation: fadeIn 0.3s ease; }
+      .tab-content.active { display: block; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+      .feature-card { background: linear-gradient(135deg, #1a1a1d 0%, #151517 100%); border: 1px solid #262629; transition: all 0.3s ease; }
+      .feature-card:hover { border-color: #3b82f6; transform: translateY(-2px); }
+    </style>
+  </head>
+  <body class="bg-[#0a0a0b] min-h-screen">
+    <div class="max-w-5xl mx-auto px-6 py-24">
+      <header class="mb-16">
+        <a href="changelog.html" class="inline-flex items-center gap-1 text-sm text-white/30 hover:text-white/70 text-sm mb-6 inline-block transition-colors"><span class="text-xs">&larr; Back tolarr;</span> Back to Changelog <span class="text-[10px]">→</span></a>
+        <h1 class="text-5xl font-bold text-white mt-4 tracking-tight">Changelog</h1>
+        <p class="text-white/40 mt-3 text-lg">September 2026</p>
+        
+        <!-- Tabs -->
+        <div class="flex gap-2 mt-8">
+          <button onclick="switchTab('product')" id="tab-product" class="tab-btn active px-5 py-2.5 rounded-lg border border-slate-700 text-slate-300 font-medium text-sm hover:border-slate-600">
+            Product
+          </button>
+          <button onclick="switchTab('technical')" id="tab-technical" class="tab-btn px-5 py-2.5 rounded-lg border border-slate-700 text-slate-300 font-medium text-sm hover:border-slate-600">
+            Technical
+          </button>
+        </div>
+      </header>
+
+      <!-- Product Changelog -->
+      <div id="content-product" class="tab-content active">
+## v0.4.0 release — retention fix, auto-tagging, tag management
+
+- **Critical retention fix** — `retention_months=0` now means keep forever (was silently falling back to 3-month default, purging mail meant to be kept indefinitely)
+- **Scheduled sync** — systemd timer caches emails from Resend every 6 hours, before their retention expires, even if the user never opens the UI
+- **Auto-refresh** — 60-second polling when the tab is visible, plus a manual refresh button
+- **Spam auto-tagging** — DMARC reports and scam/domain-renewal emails auto-tagged `spam` on ingest
+- **DMARC auto-tagging** — DMARC reports also tagged `dmarc` for filtering
+- **Tag counts in sidebar** — total message count per tag, not just unread
+- **Hide tagged from inbox** — any message with any user tag is excluded from the inbox; only untagged messages appear
+- **"Tag similar" modal** — tagging a message offers to also tag all messages from the same sender, with optional subject filter
+- **Cache headers** — UI files now send `no-cache` to prevent stale JS after deploys
+
+      </div>
+
+      <!-- Technical Changelog -->
+      <div id="content-technical" class="tab-content">
+        <div class="space-y-8">
+
+        <section>
+          <h2 class="text-2xl font-semibold text-purple-400 mb-4 flex items-center gap-2">
+            <span>💼</span> Other
+          </h2>
+          <ul class="space-y-2 text-slate-300">
+            <li><span class="text-slate-500 text-sm mr-3">[11/09]</span>Release v0.4.0</li>
+            <li><span class="text-slate-500 text-sm mr-3">[11/09]</span>Auto-tag DMARC reports with 'dmarc' tag on ingest</li>
+            <li><span class="text-slate-500 text-sm mr-3">[11/09]</span>Hide all tagged messages from the inbox</li>
+            <li><span class="text-slate-500 text-sm mr-3">[11/09]</span>Fix missing closing paren in return statement</li>
+            <li><span class="text-slate-500 text-sm mr-3">[11/09]</span>Fix JSX syntax error: wrap AppLayout + TagSimilarModal in fragment</li>
+            <li><span class="text-slate-500 text-sm mr-3">[11/09]</span>Add 'Tag similar messages' modal with from + subject filter</li>
+            <li><span class="text-slate-500 text-sm mr-3">[11/09]</span>Hide spam-tagged messages from the inbox view</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/09]</span>Show total message count per tag in sidebar</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/09]</span>Fix bulk tag action not creating tag row in tags collection</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/09]</span>Add no-cache headers to UI files to prevent stale JS after deploys</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/09]</span>Auto-tag DMARC reports and scam emails as spam on ingest</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/09]</span>Add refresh button and 60s auto-refresh to webmail UI</li>
+            <li><span class="text-slate-500 text-sm mr-3">[10/09]</span>Fix retention_months=0 purging mail meant to be kept forever</li>
+          </ul>
+        </section>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function switchTab(tab) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById('content-' + tab).classList.add('active');
+        document.getElementById('tab-' + tab).classList.add('active');
+      }
+    </script>
+  </body>
+</html>
